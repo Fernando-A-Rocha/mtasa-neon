@@ -1,23 +1,34 @@
-local catalogByName = {}
-local catalogByLogicalId = {}
+local models = {}
+local names = {}
+local clientCatalog = false
 local syncedPlayers = {}
 
-local function buildClientCatalog()
-    local clientCatalog = {}
-    for logicalId, entry in pairs(catalogByLogicalId) do
-        clientCatalog[#clientCatalog + 1] = {
+local function invalidateClientCatalog()
+    clientCatalog = false
+end
+
+local function ensureClientCatalog()
+    if clientCatalog then
+        return clientCatalog
+    end
+
+    local catalog = {}
+    for logicalId, entry in pairs(models) do
+        catalog[#catalog + 1] = {
             logicalId = logicalId,
             type = entry.type,
             parent = entry.parent,
             name = entry.name,
             qualifiedName = entry.qualifiedName,
-            assets = entry.clientAssets,
+            assets = entry.assets,
             settings = entry.settings,
         }
     end
-    table.sort(clientCatalog, function(a, b)
+    table.sort(catalog, function(a, b)
         return a.logicalId < b.logicalId
     end)
+
+    clientCatalog = catalog
     return clientCatalog
 end
 
@@ -33,13 +44,14 @@ local function sendCatalogToPlayer(player)
     if not isElement(player) then
         return
     end
-    triggerClientEvent(player, "newmodels_neon:catalog", resourceRoot, buildClientCatalog())
+    triggerClientEvent(player, "newmodels_neon:catalog", resourceRoot, ensureClientCatalog())
 end
 
 local function syncCatalogToReadyPlayers()
+    local catalog = ensureClientCatalog()
     for player in pairs(syncedPlayers) do
         if isElement(player) then
-            sendCatalogToPlayer(player)
+            triggerClientEvent(player, "newmodels_neon:catalog", resourceRoot, catalog)
         else
             syncedPlayers[player] = nil
         end
@@ -48,7 +60,7 @@ end
 
 local function registerDefinition(definition, ownerResource)
     local qualifiedName = definition.qualifiedName
-    if catalogByName[qualifiedName] then
+    if names[qualifiedName] or names[definition.name] then
         return false, "duplicate model name: " .. qualifiedName
     end
 
@@ -57,32 +69,29 @@ local function registerDefinition(definition, ownerResource)
         return false, "engineRequestModel failed for " .. qualifiedName
     end
 
-    local clientAssets = {}
+    local assets = {}
     for assetType, path in pairs(definition.assets) do
         if path then
             if definition.sourceResource and definition.sourceResource ~= getResourceName(resource) then
-                clientAssets[assetType] = ":" .. definition.sourceResource .. "/" .. path
+                assets[assetType] = ":" .. definition.sourceResource .. "/" .. path
             else
-                clientAssets[assetType] = path
+                assets[assetType] = path
             end
         end
     end
 
-    local entry = {
+    models[logicalId] = {
         logicalId = logicalId,
         type = definition.type,
         parent = definition.parent,
         name = definition.name,
         qualifiedName = qualifiedName,
-        ownerResource = ownerResource,
-        assets = definition.assets,
-        clientAssets = clientAssets,
+        assets = assets,
         settings = definition.settings or {},
+        ownerResource = ownerResource,
     }
-
-    catalogByName[qualifiedName] = entry
-    catalogByName[definition.name] = entry
-    catalogByLogicalId[logicalId] = entry
+    names[qualifiedName] = logicalId
+    names[definition.name] = logicalId
 
     outputServerLog(("[%s] allocated %s (%s parent=%d) as logical model %d"):format(
         NEWMODELS_RESOURCE,
@@ -103,28 +112,29 @@ local function loadScannedModels()
     end
 
     for i = 1, #discovered do
-        local definition = discovered[i]
-        local logicalId, reason = registerDefinition(definition, resource)
+        local logicalId, reason = registerDefinition(discovered[i], resource)
         if not logicalId then
             return false, reason
         end
     end
 
+    invalidateClientCatalog()
     return true, countOrReason
 end
 
 function getModelId(name)
-    local entry = catalogByName[name]
-    return entry and entry.logicalId or false
+    return names[name] or false
 end
 
 function getModelDefinition(name)
-    local entry = catalogByName[name]
-    if not entry then
+    local logicalId = names[name]
+    if not logicalId then
         return false
     end
+
+    local entry = models[logicalId]
     return {
-        logicalId = entry.logicalId,
+        logicalId = logicalId,
         type = entry.type,
         parent = entry.parent,
         name = entry.name,
@@ -134,7 +144,7 @@ end
 
 function getModels(modelType)
     local results = {}
-    for logicalId, entry in pairs(catalogByLogicalId) do
+    for logicalId, entry in pairs(models) do
         if not modelType or entry.type == modelType then
             results[#results + 1] = logicalId
         end
@@ -144,7 +154,7 @@ function getModels(modelType)
 end
 
 function getModelCatalog()
-    return buildClientCatalog()
+    return ensureClientCatalog()
 end
 
 function registerModels(modelList)
@@ -156,8 +166,7 @@ function registerModels(modelList)
 
     local registered = {}
     for index = 1, #modelList do
-        local definition = modelList[index]
-        local normalized, reason = newmodelsNormalizeExternalDefinition(ownerName, definition)
+        local normalized, reason = newmodelsNormalizeExternalDefinition(ownerName, modelList[index])
         if not normalized then
             return false, ("entry %d: %s"):format(index, reason)
         end
@@ -168,6 +177,7 @@ function registerModels(modelList)
         registered[#registered + 1] = logicalId
     end
 
+    invalidateClientCatalog()
     syncCatalogToReadyPlayers()
     return true, registered
 end
@@ -192,7 +202,6 @@ addEventHandler("onPlayerResourceStart", root, function(startedResource)
         return
     end
 
-    -- Deliver the catalog only after this player's client has started the resource.
     markPlayerSynced(source)
     sendCatalogToPlayer(source)
 end)
