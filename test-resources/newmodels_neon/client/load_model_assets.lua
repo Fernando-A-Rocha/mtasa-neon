@@ -133,8 +133,8 @@ end
 
 local function unloadMissingModels()
     local active = {}
-    for _, entry in ipairs(catalog) do
-        active[entry.logicalId] = true
+    for i = 1, #catalog do
+        active[catalog[i].logicalId] = true
     end
 
     for logicalId in pairs(loaded) do
@@ -146,8 +146,8 @@ end
 
 local function tryLoadAll()
     local pending = 0
-    for _, entry in ipairs(catalog) do
-        if not applyModel(entry) then
+    for i = 1, #catalog do
+        if not applyModel(catalog[i]) then
             pending = pending + 1
         end
     end

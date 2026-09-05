@@ -4,7 +4,8 @@
 addCommandHandler("newmodelinfo", function(player)
     local catalog = exports[NEWMODELS_RESOURCE]:getModelCatalog()
     local lines = {}
-    for _, entry in ipairs(catalog) do
+    for i = 1, #catalog do
+        local entry = catalog[i]
         lines[#lines + 1] = ("%s=%d parent=%d"):format(entry.qualifiedName, entry.logicalId, entry.parent)
     end
     if #lines == 0 then

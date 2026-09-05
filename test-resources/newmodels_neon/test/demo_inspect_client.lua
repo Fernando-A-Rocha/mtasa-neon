@@ -8,7 +8,8 @@ addCommandHandler("newmodelclient", function()
         return
     end
 
-    for _, entry in ipairs(catalog) do
+    for i = 1, #catalog do
+        local entry = catalog[i]
         local runtimeId = engineGetModelRuntimeID(entry.logicalId)
         local reverseId = runtimeId and engineGetModelServerID(runtimeId) or false
         local loadState = exports[NEWMODELS_RESOURCE]:isModelLoaded(entry.logicalId)

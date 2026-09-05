@@ -102,7 +102,8 @@ local function loadScannedModels()
         return false, countOrReason
     end
 
-    for _, definition in ipairs(discovered) do
+    for i = 1, #discovered do
+        local definition = discovered[i]
         local logicalId, reason = registerDefinition(definition, resource)
         if not logicalId then
             return false, reason
@@ -154,7 +155,8 @@ function registerModels(modelList)
     end
 
     local registered = {}
-    for index, definition in ipairs(modelList) do
+    for index = 1, #modelList do
+        local definition = modelList[index]
         local normalized, reason = newmodelsNormalizeExternalDefinition(ownerName, definition)
         if not normalized then
             return false, ("entry %d: %s"):format(index, reason)

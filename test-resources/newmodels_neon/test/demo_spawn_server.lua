@@ -22,7 +22,8 @@ local DEMO_MODELS = {
 }
 
 local function clearDemoElements()
-    for _, element in ipairs(demoElements) do
+    for i = 1, #demoElements do
+        local element = demoElements[i]
         if isElement(element) then
             destroyElement(element)
         end
@@ -65,7 +66,8 @@ addCommandHandler("newmodelspawn", function(player, modelName)
     local targets = DEMO_MODELS
     if modelName and modelName ~= "" and modelName ~= "all" then
         targets = {}
-        for _, demo in ipairs(DEMO_MODELS) do
+        for i = 1, #DEMO_MODELS do
+            local demo = DEMO_MODELS[i]
             if demo.name == modelName then
                 targets[#targets + 1] = demo
             end
@@ -77,8 +79,8 @@ addCommandHandler("newmodelspawn", function(player, modelName)
     end
 
     local results = {}
-    for _, demo in ipairs(targets) do
-        local ok, details = spawnDemoModel(player, demo)
+    for i = 1, #targets do
+        local ok, details = spawnDemoModel(player, targets[i])
         if not ok then
             outputChatBox("[newmodels_neon] " .. details, player, 255, 80, 80)
             return
@@ -89,7 +91,8 @@ addCommandHandler("newmodelspawn", function(player, modelName)
     local shouldWarp = not modelName or modelName == "" or modelName == "all" or modelName == "demo_faggio"
     local faggioId = shouldWarp and exports[NEWMODELS_RESOURCE]:getModelId("demo_faggio") or false
     if faggioId then
-        for _, element in ipairs(demoElements) do
+        for i = 1, #demoElements do
+            local element = demoElements[i]
             if isElement(element) and getElementType(element) == "vehicle" and getElementModel(element) == faggioId then
                 warpPedIntoVehicle(player, element)
                 break

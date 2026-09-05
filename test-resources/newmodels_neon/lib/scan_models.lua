@@ -1,4 +1,4 @@
-local VALID_MODEL_TYPES = { vehicle = true, object = true, ped = true }
+local VALID_MODEL_TYPE_LOOKUP = { vehicle = true, object = true, ped = true }
 
 local function isValidParent(modelType, parent)
     if modelType == "vehicle" then
@@ -14,7 +14,9 @@ local function collectModelFolder(modelType, parent, folderName, folderPath)
     local assets = {}
     local settings = {}
 
-    for _, entry in ipairs(pathListDir(folderPath) or {}) do
+    local entries = pathListDir(folderPath) or {}
+    for i = 1, #entries do
+        local entry = entries[i]
         local entryPath = folderPath .. "/" .. entry
         if pathIsFile(entryPath) then
             local extension = entry:match("%.([^.]+)$")
@@ -64,17 +66,22 @@ function newmodelsScanFolder(resourceName)
         return discovered, 0
     end
 
-    for _, modelType in ipairs({ "vehicle", "object", "ped" }) do
+    for i = 1, #VALID_MODEL_TYPES do
+        local modelType = VALID_MODEL_TYPES[i]
         local typePath = MODELS_ROOT .. "/" .. modelType
         if not pathIsDirectory(typePath) then
             -- continue
         else
-            for _, parentName in ipairs(pathListDir(typePath) or {}) do
+            local parentNames = pathListDir(typePath) or {}
+            for j = 1, #parentNames do
+                local parentName = parentNames[j]
                 local parent = tonumber(parentName)
                 if parent and isValidParent(modelType, parent) then
                     local parentPath = typePath .. "/" .. parentName
                     if pathIsDirectory(parentPath) then
-                        for _, folderName in ipairs(pathListDir(parentPath) or {}) do
+                        local folderNames = pathListDir(parentPath) or {}
+                        for k = 1, #folderNames do
+                            local folderName = folderNames[k]
                             local folderPath = parentPath .. "/" .. folderName
                             if pathIsDirectory(folderPath) then
                                 local definition, reason = collectModelFolder(modelType, parent, folderName, folderPath)
@@ -110,7 +117,7 @@ function newmodelsNormalizeExternalDefinition(resourceName, definition)
     if type(definition) ~= "table" then
         return false, "model definition must be a table"
     end
-    if not VALID_MODEL_TYPES[definition.type or ""] then
+    if not VALID_MODEL_TYPE_LOOKUP[definition.type or ""] then
         return false, "invalid model type: " .. tostring(definition.type)
     end
     if type(definition.parent) ~= "number" or not isValidParent(definition.type, definition.parent) then
