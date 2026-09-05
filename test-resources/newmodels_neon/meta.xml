@@ -1,0 +1,17 @@
+<meta>
+    <info author="MTA Neon" name="Newmodels Neon" type="script" version="1.0.0" description="Server-authoritative custom model registry with client asset streaming." />
+    <script src="lib/shared.lua" type="shared" cache="false" />
+    <script src="lib/scan.lua" type="server" />
+    <script src="server.lua" type="server" />
+    <script src="client.lua" type="client" cache="false" />
+
+    <file src="models/**/*" />
+
+    <export function="getModelId" type="server" />
+    <export function="getModelDefinition" type="server" />
+    <export function="getModels" type="server" />
+    <export function="registerModels" type="server" />
+    <export function="getModelRuntimeId" type="client" />
+    <export function="isModelLoaded" type="client" />
+    <export function="getLoadedModels" type="client" />
+</meta>
