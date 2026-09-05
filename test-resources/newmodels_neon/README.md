@@ -14,12 +14,21 @@ Place models under `models/<type>/<parent>/<name>/`:
 models/
   object/
     1337/
-      demo_crate/
-        model.dff
-        model.col
-        settings.txt
+      demo_crate/      # big box (newmodels_red sample)
+      small_box/       # small box (shared boxes.txd)
       boxes.txd
+  ped/
+    7/
+      demo_gangster/   # custom skin sample
+  vehicle/
+    462/
+      demo_faggio/     # custom bike sample
+    520/
+      demo_hydra/      # custom aircraft sample
 ```
+
+Bundled example assets are taken from
+[mta-add-models/newmodels_red](https://github.com/Fernando-A-Rocha/mta-add-models/tree/main/newmodels_red/models).
 
 Supported types: `vehicle`, `object`, `ped`.
 
@@ -78,7 +87,10 @@ Never persist or synchronize runtime IDs. Only logical server IDs are stable.
 
 ## Test commands
 
-- `/newmodelspawn` — spawns the bundled `demo_crate` object next to the player
+- `/newmodelspawn [name|all]` — spawns bundled demo models (default: all)
+  - object: `demo_crate`, `small_box`
+  - ped: `demo_gangster`
+  - vehicle: `demo_faggio`, `demo_hydra` (warps you into the faggio when spawned as part of `all`)
 - `/newmodelinfo` — lists registered logical models (server)
 - `/newmodelclient` — prints logical/runtime mappings and load state (client)
 
