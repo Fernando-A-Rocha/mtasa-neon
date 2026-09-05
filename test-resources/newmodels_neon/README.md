@@ -23,6 +23,9 @@ Production servers only need the `lib/`, `server/`, and `client/` scripts plus y
 `models/` assets. Remove the three `test/` scripts from `meta.xml` when you do not need the
 bundled demo commands. See `meta.xml` comments for details.
 
+The server pushes the client catalog through `onPlayerResourceStart` (per player, after their
+client has loaded this resource). It does not use element data or root-wide client events.
+
 ## Folder layout
 
 Place models under `models/<type>/<parent>/<name>/`:

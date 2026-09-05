@@ -189,17 +189,14 @@ function getLoadedModels()
     return results
 end
 
+function getClientCatalog()
+    return catalog
+end
+
 addEvent("newmodels_neon:catalog", true)
 addEventHandler("newmodels_neon:catalog", resourceRoot, function(newCatalog)
     setCatalog(newCatalog)
 end, false)
-
-addEventHandler("onClientResourceStart", resourceRoot, function()
-    local initialCatalog = getElementData(resourceRoot, "newmodels_neon.catalog")
-    if type(initialCatalog) == "table" then
-        setCatalog(initialCatalog)
-    end
-end)
 
 addEventHandler("onClientResourceStop", resourceRoot, function()
     if isTimer(pollTimer) then

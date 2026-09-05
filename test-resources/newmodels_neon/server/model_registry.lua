@@ -1,5 +1,6 @@
 local catalogByName = {}
 local catalogByLogicalId = {}
+local syncedPlayers = {}
 
 local function buildClientCatalog()
     local clientCatalog = {}
@@ -20,10 +21,29 @@ local function buildClientCatalog()
     return clientCatalog
 end
 
-local function publishCatalog()
-    local clientCatalog = buildClientCatalog()
-    setElementData(resourceRoot, "newmodels_neon.catalog", clientCatalog, false)
-    triggerClientEvent(root, "newmodels_neon:catalog", resourceRoot, clientCatalog)
+local function markPlayerSynced(player)
+    syncedPlayers[player] = true
+end
+
+local function unmarkPlayerSynced(player)
+    syncedPlayers[player] = nil
+end
+
+local function sendCatalogToPlayer(player)
+    if not isElement(player) then
+        return
+    end
+    triggerClientEvent(player, "newmodels_neon:catalog", resourceRoot, buildClientCatalog())
+end
+
+local function syncCatalogToReadyPlayers()
+    for player in pairs(syncedPlayers) do
+        if isElement(player) then
+            sendCatalogToPlayer(player)
+        else
+            syncedPlayers[player] = nil
+        end
+    end
 end
 
 local function registerDefinition(definition, ownerResource)
@@ -92,10 +112,6 @@ local function loadScannedModels()
     return true, countOrReason
 end
 
-local function sendCatalogToPlayer(player)
-    triggerClientEvent(player, "newmodels_neon:catalog", resourceRoot, buildClientCatalog())
-end
-
 function getModelId(name)
     local entry = catalogByName[name]
     return entry and entry.logicalId or false
@@ -150,7 +166,7 @@ function registerModels(modelList)
         registered[#registered + 1] = logicalId
     end
 
-    publishCatalog()
+    syncCatalogToReadyPlayers()
     return true, registered
 end
 
@@ -162,7 +178,6 @@ addEventHandler("onResourceStart", resourceRoot, function()
         return
     end
 
-    publishCatalog()
     outputServerLog(("[%s] ready with %d model(s), %d logical slot(s) remaining"):format(
         NEWMODELS_RESOURCE,
         details,
@@ -171,7 +186,21 @@ addEventHandler("onResourceStart", resourceRoot, function()
 end)
 
 addEventHandler("onPlayerResourceStart", root, function(startedResource)
-    if startedResource == resource then
-        sendCatalogToPlayer(source)
+    if startedResource ~= resource then
+        return
     end
+
+    -- Deliver the catalog only after this player's client has started the resource.
+    markPlayerSynced(source)
+    sendCatalogToPlayer(source)
+end)
+
+addEventHandler("onPlayerResourceStop", root, function(stoppedResource)
+    if stoppedResource == resource then
+        unmarkPlayerSynced(source)
+    end
+end)
+
+addEventHandler("onPlayerQuit", root, function()
+    unmarkPlayerSynced(source)
 end)

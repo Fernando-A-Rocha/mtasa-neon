@@ -29,4 +29,5 @@
     <export function="getModelRuntimeId" type="client" />
     <export function="isModelLoaded" type="client" />
     <export function="getLoadedModels" type="client" />
+    <export function="getClientCatalog" type="client" />
 </meta>

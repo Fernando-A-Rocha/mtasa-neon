@@ -2,7 +2,7 @@
 -- Safe to remove from meta.xml on production servers.
 
 addCommandHandler("newmodelclient", function()
-    local catalog = getElementData(resourceRoot, "newmodels_neon.catalog")
+    local catalog = exports[NEWMODELS_RESOURCE]:getClientCatalog()
     if type(catalog) ~= "table" or #catalog == 0 then
         outputChatBox("[newmodels_neon] no catalog entries.", 255, 190, 80)
         return
