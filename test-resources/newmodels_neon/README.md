@@ -6,6 +6,23 @@ Server scripts allocate stable logical model IDs with `engineRequestModel`. Clie
 those IDs to local GTA runtime slots with `engineGetModelRuntimeID`, then apply DFF/TXD/COL
 replacements from this resource (or from another resource via `registerModels`).
 
+## Resource layout
+
+```text
+lib/shared.lua                 # shared helpers and settings parsing
+lib/scan_models.lua            # scans models/ on the server
+server/model_registry.lua      # production: allocation, exports, catalog sync
+client/load_model_assets.lua   # production: runtime asset loading
+test/demo_spawn_server.lua     # optional: /newmodelspawn
+test/demo_inspect_server.lua   # optional: /newmodelinfo
+test/demo_inspect_client.lua   # optional: /newmodelclient
+models/                        # your DFF/TXD/COL tree (bundled demos are optional)
+```
+
+Production servers only need the `lib/`, `server/`, and `client/` scripts plus your own
+`models/` assets. Remove the three `test/` scripts from `meta.xml` when you do not need the
+bundled demo commands. See `meta.xml` comments for details.
+
 ## Folder layout
 
 Place models under `models/<type>/<parent>/<name>/`:
@@ -85,7 +102,9 @@ local runtime = exports.newmodels_neon:getModelRuntimeId(logicalId)
 
 Never persist or synchronize runtime IDs. Only logical server IDs are stable.
 
-## Test commands
+## Test commands (optional scripts)
+
+These require the `test/` scripts listed in `meta.xml`:
 
 - `/newmodelspawn [name|all]` — spawns bundled demo models (default: all)
   - object: `demo_crate`, `small_box`

@@ -1,15 +1,30 @@
 <meta>
     <info author="MTA Neon" name="Newmodels Neon" type="script" version="1.0.0" description="Server-authoritative custom model registry with client asset streaming." />
-    <script src="lib/shared.lua" type="shared" cache="false" />
-    <script src="lib/scan.lua" type="server" />
-    <script src="server.lua" type="server" />
-    <script src="client.lua" type="client" cache="false" />
 
+    <!-- Production library (required): shared helpers, folder scan, registry, and client asset loading. -->
+    <script src="lib/shared.lua" type="shared" cache="false" />
+    <script src="lib/scan_models.lua" type="server" />
+    <script src="server/model_registry.lua" type="server" />
+    <script src="client/load_model_assets.lua" type="client" cache="false" />
+
+    <!-- Optional test harness (safe to remove on production servers):
+         - demo_spawn_server.lua: /newmodelspawn for bundled example models
+         - demo_inspect_server.lua: /newmodelinfo listing registered logical IDs
+         - demo_inspect_client.lua: /newmodelclient logical/runtime mapping dump
+         Remove these three scripts if you only need the library exports.
+         Bundled files under models/ are example assets; replace or delete them when
+         deploying your own model tree. -->
+    <script src="test/demo_spawn_server.lua" type="server" />
+    <script src="test/demo_inspect_server.lua" type="server" />
+    <script src="test/demo_inspect_client.lua" type="client" cache="false" />
+
+    <!-- Example model assets (optional): glob your own models/ tree or remove demo folders. -->
     <file src="models/**/*" />
 
     <export function="getModelId" type="server" />
     <export function="getModelDefinition" type="server" />
     <export function="getModels" type="server" />
+    <export function="getModelCatalog" type="server" />
     <export function="registerModels" type="server" />
     <export function="getModelRuntimeId" type="client" />
     <export function="isModelLoaded" type="client" />

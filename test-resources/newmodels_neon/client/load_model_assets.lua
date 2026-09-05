@@ -210,25 +210,3 @@ addEventHandler("onClientResourceStop", resourceRoot, function()
         unloadModel(logicalId)
     end
 end)
-
-addCommandHandler("newmodelclient", function()
-    if #catalog == 0 then
-        outputChatBox("[newmodels_neon] no catalog entries.", 255, 190, 80)
-        return
-    end
-
-    for _, entry in ipairs(catalog) do
-        local runtimeId = engineGetModelRuntimeID(entry.logicalId)
-        local reverseId = runtimeId and engineGetModelServerID(runtimeId) or false
-        local loadState = loaded[entry.logicalId]
-        outputChatBox((
-            "%s: logical=%s runtime=%s reverse=%s loaded=%s"
-        ):format(
-            entry.qualifiedName,
-            tostring(entry.logicalId),
-            tostring(runtimeId),
-            tostring(reverseId),
-            tostring(loadState and loadState.runtimeId or false)
-        ), 120, 220, 255)
-    end
-end)
