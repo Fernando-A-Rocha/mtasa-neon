@@ -120,11 +120,10 @@ Never persist or synchronize runtime IDs. Only logical server IDs are stable.
 
 These require the `test/` scripts listed in `meta.xml`:
 
-- `/newmodelspawn [name|all]` — spawns bundled demo models (default: all)
-  - object: `demo_crate`, `small_box`, `engine_hoist`, `wrecked_car_1`, `wrecked_car_2`
-  - ped: `demo_gangster`, `mafioso_1`, `mafioso_2`, `mafioso_3`
-  - vehicle: `demo_faggio`, `demo_hydra`, `schafter`, `landstalker_02`, `landstalker_86`, `landstalker_98`, `sanchez_test`
-  - warps you into `schafter` (or `demo_faggio`) when spawned as part of `all`
+- `/newmodelspawn <name|id>` — spawns one model next to the player
+  - custom logical models by registered name (e.g. `schafter`, `demo_crate`)
+  - vanilla MTA model IDs (e.g. `411`)
+  - vanilla vehicle names via `getVehicleModelFromName` (e.g. `Infernus`)
 - `/newmodelinfo` — lists registered logical models (server)
 - `/newmodelclient` — prints logical/runtime mappings and load state (client)
 

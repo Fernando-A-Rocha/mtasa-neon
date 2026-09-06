@@ -1,60 +1,7 @@
--- Optional test harness: spawns bundled example models for manual verification.
+-- Optional test harness: spawns one model by custom name, MTA model ID, or vehicle name.
 -- Safe to remove from meta.xml on production servers that supply their own models/ tree.
 
 local demoElements = {}
-local WARP_VEHICLE = "schafter"
-local WARP_FALLBACK = "demo_faggio"
-
-local DEMO_MODELS = {
-    { name = "demo_crate", create = function(logicalId, x, y, z)
-        return createObject(logicalId, x, y, z)
-    end },
-    { name = "small_box", create = function(logicalId, x, y, z)
-        return createObject(logicalId, x, y, z)
-    end },
-    { name = "engine_hoist", create = function(logicalId, x, y, z)
-        return createObject(logicalId, x, y, z)
-    end },
-    { name = "wrecked_car_1", create = function(logicalId, x, y, z)
-        return createObject(logicalId, x, y, z)
-    end },
-    { name = "wrecked_car_2", create = function(logicalId, x, y, z)
-        return createObject(logicalId, x, y, z)
-    end },
-    { name = "demo_gangster", create = function(logicalId, x, y, z)
-        return createPed(logicalId, x, y, z, 180)
-    end },
-    { name = "mafioso_1", create = function(logicalId, x, y, z)
-        return createPed(logicalId, x, y, z, 180)
-    end },
-    { name = "mafioso_2", create = function(logicalId, x, y, z)
-        return createPed(logicalId, x, y, z, 180)
-    end },
-    { name = "mafioso_3", create = function(logicalId, x, y, z)
-        return createPed(logicalId, x, y, z, 180)
-    end },
-    { name = "demo_faggio", create = function(logicalId, x, y, z)
-        return createVehicle(logicalId, x, y, z)
-    end },
-    { name = "demo_hydra", create = function(logicalId, x, y, z)
-        return createVehicle(logicalId, x, y, z + 1)
-    end },
-    { name = "schafter", create = function(logicalId, x, y, z)
-        return createVehicle(logicalId, x, y, z)
-    end },
-    { name = "landstalker_02", create = function(logicalId, x, y, z)
-        return createVehicle(logicalId, x, y, z)
-    end },
-    { name = "landstalker_86", create = function(logicalId, x, y, z)
-        return createVehicle(logicalId, x, y, z)
-    end },
-    { name = "landstalker_98", create = function(logicalId, x, y, z)
-        return createVehicle(logicalId, x, y, z)
-    end },
-    { name = "sanchez_test", create = function(logicalId, x, y, z)
-        return createVehicle(logicalId, x, y, z)
-    end },
-}
 
 local function clearDemoElements()
     for i = 1, #demoElements do
@@ -66,41 +13,120 @@ local function clearDemoElements()
     demoElements = {}
 end
 
-local function spawnDemoModel(player, demo)
-    local logicalId = exports[NEWMODELS_RESOURCE]:getModelId(demo.name)
-    if not logicalId then
-        return false, demo.name .. " is not registered"
+local function describeVanillaModel(modelId, modelType)
+    if modelType == "vehicle" then
+        local vehicleName = getVehicleNameFromModel(modelId)
+        if vehicleName and vehicleName ~= "" then
+            return vehicleName .. " (" .. modelId .. ")"
+        end
+    end
+    return tostring(modelId)
+end
+
+local function resolveSpawnModel(identifier)
+    if not identifier or identifier == "" then
+        return false, "usage: /newmodelspawn <custom-name|model-id|vehicle-name>"
     end
 
+    if identifier == "all" then
+        return false, "spawn one model at a time; use /newmodelinfo to list custom models"
+    end
+
+    local customId = exports[NEWMODELS_RESOURCE]:getModelId(identifier)
+    if customId then
+        local definition = exports[NEWMODELS_RESOURCE]:getModelDefinition(identifier)
+        if not definition then
+            definition = exports[NEWMODELS_RESOURCE]:getModelDefinition(customId)
+        end
+        return {
+            model = customId,
+            type = definition and definition.type or "object",
+            label = definition and definition.qualifiedName or identifier,
+            source = "custom",
+        }
+    end
+
+    local numericId = tonumber(identifier)
+    if numericId then
+        local vehicleName = getVehicleNameFromModel(numericId)
+        if vehicleName and vehicleName ~= "" then
+            return {
+                model = numericId,
+                type = "vehicle",
+                label = vehicleName .. " (" .. numericId .. ")",
+                source = "vanilla",
+            }
+        end
+        if numericId >= 400 and numericId <= 611 then
+            return {
+                model = numericId,
+                type = "vehicle",
+                label = tostring(numericId),
+                source = "vanilla",
+            }
+        end
+        if numericId >= 0 and numericId <= 312 then
+            return {
+                model = numericId,
+                type = "ped",
+                label = tostring(numericId),
+                source = "vanilla",
+            }
+        end
+        return {
+            model = numericId,
+            type = "object",
+            label = tostring(numericId),
+            source = "vanilla",
+        }
+    end
+
+    local vehicleId = getVehicleModelFromName(identifier)
+    if vehicleId then
+        return {
+            model = vehicleId,
+            type = "vehicle",
+            label = getVehicleNameFromModel(vehicleId) .. " (" .. vehicleId .. ")",
+            source = "vanilla",
+        }
+    end
+
+    return false, "unknown model '" .. identifier .. "'; try /newmodelinfo for custom models"
+end
+
+local function spawnResolvedModel(player, resolved)
     local x, y, z = getElementPosition(player)
-    local offset = (#demoElements + 1) * 3
-    local element = demo.create(logicalId, x + offset, y, z)
+    local offset = #demoElements * 3
+    local spawnX = x + 2 + offset
+    local element
+
+    if resolved.type == "vehicle" then
+        element = createVehicle(resolved.model, spawnX, y, z)
+    elseif resolved.type == "ped" then
+        element = createPed(resolved.model, spawnX, y, z, 0)
+    else
+        element = createObject(resolved.model, spawnX, y, z)
+    end
+
     if not element then
-        return false, ("failed to create %s (logical %d)"):format(demo.name, logicalId)
+        return false, ("failed to create %s as %s"):format(resolved.label, resolved.type)
     end
 
     demoElements[#demoElements + 1] = element
-    return true, ("%s logical=%d parent=%d"):format(
-        demo.name,
-        logicalId,
-        engineGetModelParent(logicalId)
+
+    if resolved.source == "custom" then
+        return true, ("%s logical=%d parent=%d"):format(
+            resolved.label,
+            resolved.model,
+            engineGetModelParent(resolved.model)
+        )
+    end
+
+    return true, ("%s %s=%s"):format(
+        resolved.type,
+        resolved.type == "vehicle" and describeVanillaModel(resolved.model, "vehicle") or resolved.label,
+        tostring(getElementModel(element))
     )
-end
-
-local function warpIntoDemoVehicle(player, vehicleName)
-    local logicalId = exports[NEWMODELS_RESOURCE]:getModelId(vehicleName)
-    if not logicalId then
-        return false
-    end
-
-    for i = 1, #demoElements do
-        local element = demoElements[i]
-        if isElement(element) and getElementType(element) == "vehicle" and getElementModel(element) == logicalId then
-            warpPedIntoVehicle(player, element)
-            return true
-        end
-    end
-    return false
 end
 
 addEventHandler("onResourceStop", resourceRoot, function()
@@ -112,40 +138,19 @@ addCommandHandler("newmodelspawn", function(player, _, modelName)
         return
     end
 
+    local resolved, reason = resolveSpawnModel(modelName)
+    if not resolved then
+        outputChatBox("[newmodels_neon] " .. reason, player, 255, 120, 80)
+        return
+    end
+
     clearDemoElements()
 
-    local targets = DEMO_MODELS
-    if modelName and modelName ~= "" and modelName ~= "all" then
-        targets = {}
-        for i = 1, #DEMO_MODELS do
-            local demo = DEMO_MODELS[i]
-            if demo.name == modelName then
-                targets[#targets + 1] = demo
-            end
-        end
-        if #targets == 0 then
-            outputChatBox("[newmodels_neon] unknown demo model: " .. modelName, player, 255, 120, 80)
-            return
-        end
+    local ok, details = spawnResolvedModel(player, resolved)
+    if not ok then
+        outputChatBox("[newmodels_neon] " .. details, player, 255, 80, 80)
+        return
     end
 
-    local results = {}
-    for i = 1, #targets do
-        local ok, details = spawnDemoModel(player, targets[i])
-        if not ok then
-            outputChatBox("[newmodels_neon] " .. details, player, 255, 80, 80)
-            return
-        end
-        results[#results + 1] = details
-    end
-
-    local shouldWarp = not modelName or modelName == "" or modelName == "all"
-        or modelName == WARP_VEHICLE or modelName == WARP_FALLBACK
-    if shouldWarp then
-        if not warpIntoDemoVehicle(player, WARP_VEHICLE) then
-            warpIntoDemoVehicle(player, WARP_FALLBACK)
-        end
-    end
-
-    outputChatBox("[newmodels_neon] spawned: " .. table.concat(results, " | "), player, 120, 220, 255)
+    outputChatBox("[newmodels_neon] spawned " .. details, player, 120, 220, 255)
 end)
