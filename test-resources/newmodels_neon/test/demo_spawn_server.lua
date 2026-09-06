@@ -1,18 +1,6 @@
 -- Optional test harness: spawns one model by custom name, MTA model ID, or vehicle name.
 -- Safe to remove from meta.xml on production servers that supply their own models/ tree.
 
-local demoElements = {}
-
-local function clearDemoElements()
-    for i = 1, #demoElements do
-        local element = demoElements[i]
-        if isElement(element) then
-            destroyElement(element)
-        end
-    end
-    demoElements = {}
-end
-
 local function describeVanillaModel(modelId, modelType)
     if modelType == "vehicle" then
         local vehicleName = getVehicleNameFromModel(modelId)
@@ -89,8 +77,7 @@ end
 
 local function spawnResolvedModel(player, resolved)
     local x, y, z = getElementPosition(player)
-    local offset = #demoElements * 3
-    local spawnX = x + 2 + offset
+    local spawnX = x + 2
     local element
 
     if resolved.type == "vehicle" then
@@ -104,8 +91,6 @@ local function spawnResolvedModel(player, resolved)
     if not element then
         return false, ("failed to create %s as %s"):format(resolved.label, resolved.type)
     end
-
-    demoElements[#demoElements + 1] = element
 
     if resolved.source == "custom" then
         return true, ("%s logical=%d parent=%d"):format(
@@ -121,10 +106,6 @@ local function spawnResolvedModel(player, resolved)
         tostring(getElementModel(element))
     )
 end
-
-addEventHandler("onResourceStop", resourceRoot, function()
-    clearDemoElements()
-end)
 
 addCommandHandler("newmodelspawn", function(player, _, modelName)
     if not isElement(player) then

@@ -131,8 +131,7 @@ local function applyModel(entry)
         qualifiedName = entry.qualifiedName,
     }
 
-    triggerEvent("newmodels_neon:onModelLoaded", resourceRoot, logicalId, runtimeId, entry.qualifiedName)
-    newmodelsLog(("loaded %s: logical=%d runtime=%d"):format(entry.qualifiedName, logicalId, runtimeId))
+    -- newmodelsLog(("loaded %s: logical=%d runtime=%d"):format(entry.qualifiedName, logicalId, runtimeId))
     return true
 end
 

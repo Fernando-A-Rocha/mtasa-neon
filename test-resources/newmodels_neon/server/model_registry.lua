@@ -93,6 +93,7 @@ local function registerDefinition(definition, ownerResource)
     names[qualifiedName] = logicalId
     names[definition.name] = logicalId
 
+    --[[
     outputServerLog(("[%s] allocated %s (%s parent=%d) as logical model %d"):format(
         NEWMODELS_RESOURCE,
         qualifiedName,
@@ -100,6 +101,7 @@ local function registerDefinition(definition, ownerResource)
         definition.parent,
         logicalId
     ))
+    --]]
 
     return logicalId
 end
