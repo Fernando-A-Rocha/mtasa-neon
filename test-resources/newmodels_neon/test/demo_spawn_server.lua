@@ -28,16 +28,9 @@ local function resolveSpawnModel(identifier)
         return false, "usage: /newmodelspawn <custom-name|model-id|vehicle-name>"
     end
 
-    if identifier == "all" then
-        return false, "spawn one model at a time; use /newmodelinfo to list custom models"
-    end
-
     local customId = exports[NEWMODELS_RESOURCE]:getModelId(identifier)
     if customId then
         local definition = exports[NEWMODELS_RESOURCE]:getModelDefinition(identifier)
-        if not definition then
-            definition = exports[NEWMODELS_RESOURCE]:getModelDefinition(customId)
-        end
         return {
             model = customId,
             type = definition and definition.type or "object",
@@ -143,8 +136,6 @@ addCommandHandler("newmodelspawn", function(player, _, modelName)
         outputChatBox("[newmodels_neon] " .. reason, player, 255, 120, 80)
         return
     end
-
-    clearDemoElements()
 
     local ok, details = spawnResolvedModel(player, resolved)
     if not ok then
