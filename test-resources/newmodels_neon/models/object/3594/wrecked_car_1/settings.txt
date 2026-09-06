@@ -1,0 +1,2 @@
+txd=../../wrecked_car.txd
+lodDistance=300

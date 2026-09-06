@@ -2,6 +2,8 @@
 -- Safe to remove from meta.xml on production servers that supply their own models/ tree.
 
 local demoElements = {}
+local WARP_VEHICLE = "schafter"
+local WARP_FALLBACK = "demo_faggio"
 
 local DEMO_MODELS = {
     { name = "demo_crate", create = function(logicalId, x, y, z)
@@ -10,7 +12,25 @@ local DEMO_MODELS = {
     { name = "small_box", create = function(logicalId, x, y, z)
         return createObject(logicalId, x, y, z)
     end },
+    { name = "engine_hoist", create = function(logicalId, x, y, z)
+        return createObject(logicalId, x, y, z)
+    end },
+    { name = "wrecked_car_1", create = function(logicalId, x, y, z)
+        return createObject(logicalId, x, y, z)
+    end },
+    { name = "wrecked_car_2", create = function(logicalId, x, y, z)
+        return createObject(logicalId, x, y, z)
+    end },
     { name = "demo_gangster", create = function(logicalId, x, y, z)
+        return createPed(logicalId, x, y, z, 180)
+    end },
+    { name = "mafioso_1", create = function(logicalId, x, y, z)
+        return createPed(logicalId, x, y, z, 180)
+    end },
+    { name = "mafioso_2", create = function(logicalId, x, y, z)
+        return createPed(logicalId, x, y, z, 180)
+    end },
+    { name = "mafioso_3", create = function(logicalId, x, y, z)
         return createPed(logicalId, x, y, z, 180)
     end },
     { name = "demo_faggio", create = function(logicalId, x, y, z)
@@ -18,6 +38,21 @@ local DEMO_MODELS = {
     end },
     { name = "demo_hydra", create = function(logicalId, x, y, z)
         return createVehicle(logicalId, x, y, z + 1)
+    end },
+    { name = "schafter", create = function(logicalId, x, y, z)
+        return createVehicle(logicalId, x, y, z)
+    end },
+    { name = "landstalker_02", create = function(logicalId, x, y, z)
+        return createVehicle(logicalId, x, y, z)
+    end },
+    { name = "landstalker_86", create = function(logicalId, x, y, z)
+        return createVehicle(logicalId, x, y, z)
+    end },
+    { name = "landstalker_98", create = function(logicalId, x, y, z)
+        return createVehicle(logicalId, x, y, z)
+    end },
+    { name = "sanchez_test", create = function(logicalId, x, y, z)
+        return createVehicle(logicalId, x, y, z)
     end },
 }
 
@@ -50,6 +85,22 @@ local function spawnDemoModel(player, demo)
         logicalId,
         engineGetModelParent(logicalId)
     )
+end
+
+local function warpIntoDemoVehicle(player, vehicleName)
+    local logicalId = exports[NEWMODELS_RESOURCE]:getModelId(vehicleName)
+    if not logicalId then
+        return false
+    end
+
+    for i = 1, #demoElements do
+        local element = demoElements[i]
+        if isElement(element) and getElementType(element) == "vehicle" and getElementModel(element) == logicalId then
+            warpPedIntoVehicle(player, element)
+            return true
+        end
+    end
+    return false
 end
 
 addEventHandler("onResourceStop", resourceRoot, function()
@@ -88,15 +139,11 @@ addCommandHandler("newmodelspawn", function(player, _, modelName)
         results[#results + 1] = details
     end
 
-    local shouldWarp = not modelName or modelName == "" or modelName == "all" or modelName == "demo_faggio"
-    local faggioId = shouldWarp and exports[NEWMODELS_RESOURCE]:getModelId("demo_faggio") or false
-    if faggioId then
-        for i = 1, #demoElements do
-            local element = demoElements[i]
-            if isElement(element) and getElementType(element) == "vehicle" and getElementModel(element) == faggioId then
-                warpPedIntoVehicle(player, element)
-                break
-            end
+    local shouldWarp = not modelName or modelName == "" or modelName == "all"
+        or modelName == WARP_VEHICLE or modelName == WARP_FALLBACK
+    if shouldWarp then
+        if not warpIntoDemoVehicle(player, WARP_VEHICLE) then
+            warpIntoDemoVehicle(player, WARP_FALLBACK)
         end
     end
 

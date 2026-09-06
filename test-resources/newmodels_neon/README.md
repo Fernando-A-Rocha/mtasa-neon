@@ -33,22 +33,27 @@ Place models under `models/<type>/<parent>/<name>/`:
 ```text
 models/
   object/
-    1337/
-      demo_crate/      # big box (newmodels_red sample)
-      small_box/       # small box (shared boxes.txd)
-      boxes.txd
+    1337/              # demo_crate, small_box, engine_hoist (+ boxes.txd)
+    3593/              # wrecked_car_2
+    3594/              # wrecked_car_1
+    wrecked_car.txd    # shared texture for wrecked cars
   ped/
-    7/
-      demo_gangster/   # custom skin sample
+    1/                 # mafioso_1, mafioso_2, mafioso_3 (models_alt)
+    7/                 # demo_gangster (models/)
   vehicle/
-    462/
-      demo_faggio/     # custom bike sample
-    520/
-      demo_hydra/      # custom aircraft sample
+    400/               # landstalker_86, landstalker_98
+    462/               # demo_faggio
+    468/               # sanchez_test (DFF only)
+    489/               # landstalker_02
+    507/               # schafter
+    520/               # demo_hydra
 ```
 
-Bundled example assets are taken from
-[mta-add-models/newmodels_red](https://github.com/Fernando-A-Rocha/mta-add-models/tree/main/newmodels_red/models).
+Bundled example assets come from
+[mta-add-models/newmodels_red](https://github.com/Fernando-A-Rocha/mta-add-models/tree/main/newmodels_red/models)
+and
+[models_alt/s_mod_list.lua](https://github.com/Fernando-A-Rocha/mta-add-models/blob/main/newmodels_red/models_alt/s_mod_list.lua)
+(Elegant/nandocrypt entry excluded).
 
 Supported types: `vehicle`, `object`, `ped`.
 
@@ -110,9 +115,10 @@ Never persist or synchronize runtime IDs. Only logical server IDs are stable.
 These require the `test/` scripts listed in `meta.xml`:
 
 - `/newmodelspawn [name|all]` — spawns bundled demo models (default: all)
-  - object: `demo_crate`, `small_box`
-  - ped: `demo_gangster`
-  - vehicle: `demo_faggio`, `demo_hydra` (warps you into the faggio when spawned as part of `all`)
+  - object: `demo_crate`, `small_box`, `engine_hoist`, `wrecked_car_1`, `wrecked_car_2`
+  - ped: `demo_gangster`, `mafioso_1`, `mafioso_2`, `mafioso_3`
+  - vehicle: `demo_faggio`, `demo_hydra`, `schafter`, `landstalker_02`, `landstalker_86`, `landstalker_98`, `sanchez_test`
+  - warps you into `schafter` (or `demo_faggio`) when spawned as part of `all`
 - `/newmodelinfo` — lists registered logical models (server)
 - `/newmodelclient` — prints logical/runtime mappings and load state (client)
 
