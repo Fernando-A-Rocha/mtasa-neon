@@ -57,8 +57,9 @@ and
 
 Supported types: `vehicle`, `object`, `ped`.
 
-Each model folder must contain a DFF. TXD and COL are optional. Shared textures can live in
-the parent folder and be referenced from `settings.txt`:
+Each model folder must provide **at least one** of DFF, TXD, or COL. Any combination is valid
+(for example DFF-only, TXD-only, or all three). Shared textures can live in a parent folder and
+be referenced from `settings.txt`:
 
 ```text
 txd=../boxes.txd
@@ -95,7 +96,12 @@ exports.newmodels_neon:registerModels({
         name = "mission_infernus",
         dff = "assets/infernus.dff",
         txd = "assets/infernus.txd",
-        settings = { lodDistance = 300 },
+    },
+    {
+        type = "vehicle",
+        parent = 468,
+        name = "sanchez_mesh_only",
+        dff = "assets/sanchez.dff",
     },
 })
 ```

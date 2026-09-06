@@ -34,12 +34,11 @@ local function collectModelFolder(modelType, parent, folderName, folderPath)
         end
     end
 
-    if not assets.dff and not settings.dff then
-        return false, "model folder is missing a DFF: " .. folderPath
-    end
-
     local normalizedAssets = newmodelsNormalizeAssets(folderPath, folderName, assets, settings)
-    if not fileExists(normalizedAssets.dff) then
+    if newmodelsCountAssets(normalizedAssets) == 0 then
+        return false, "model folder must provide at least one DFF, TXD, or COL: " .. folderPath
+    end
+    if normalizedAssets.dff and not fileExists(normalizedAssets.dff) then
         return false, "DFF file not found for model folder: " .. folderPath
     end
     if normalizedAssets.txd and not fileExists(normalizedAssets.txd) then
@@ -126,9 +125,6 @@ function newmodelsNormalizeExternalDefinition(resourceName, definition)
     if type(definition.name) ~= "string" or definition.name == "" then
         return false, "model name is required"
     end
-    if type(definition.dff) ~= "string" or definition.dff == "" then
-        return false, "dff path is required"
-    end
 
     local function normalizePath(path)
         if not path then
@@ -142,6 +138,9 @@ function newmodelsNormalizeExternalDefinition(resourceName, definition)
         txd = normalizePath(definition.txd),
         col = normalizePath(definition.col),
     }
+    if newmodelsCountAssets(assets) == 0 then
+        return false, "at least one of dff, txd, or col is required"
+    end
 
     return {
         type = definition.type,

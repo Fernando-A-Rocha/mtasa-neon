@@ -95,15 +95,52 @@ function newmodelsParseSettings(filePath, folderPath)
     return settings
 end
 
+function newmodelsCountAssets(assets)
+    local count = 0
+    if assets and assets.dff then
+        count = count + 1
+    end
+    if assets and assets.txd then
+        count = count + 1
+    end
+    if assets and assets.col then
+        count = count + 1
+    end
+    return count
+end
+
 function newmodelsNormalizeAssets(folderPath, folderName, assets, settings)
     local normalized = {
-        dff = assets.dff,
-        txd = assets.txd or settings.txd,
-        col = assets.col or settings.col,
+        dff = settings.dff or assets.dff,
+        txd = settings.txd or assets.txd,
+        col = settings.col or assets.col,
     }
 
-    if settings.dff then
-        normalized.dff = settings.dff
+    if not normalized.dff then
+        local modelPath = folderPath .. "/model.dff"
+        if fileExists(modelPath) then
+            normalized.dff = modelPath
+        elseif fileExists(folderPath .. "/" .. folderName .. ".dff") then
+            normalized.dff = folderPath .. "/" .. folderName .. ".dff"
+        end
+    end
+
+    if not normalized.txd then
+        local modelPath = folderPath .. "/model.txd"
+        if fileExists(modelPath) then
+            normalized.txd = modelPath
+        elseif fileExists(folderPath .. "/" .. folderName .. ".txd") then
+            normalized.txd = folderPath .. "/" .. folderName .. ".txd"
+        end
+    end
+
+    if not normalized.col then
+        local modelPath = folderPath .. "/model.col"
+        if fileExists(modelPath) then
+            normalized.col = modelPath
+        elseif fileExists(folderPath .. "/" .. folderName .. ".col") then
+            normalized.col = folderPath .. "/" .. folderName .. ".col"
+        end
     end
 
     for assetType, path in pairs(normalized) do
@@ -112,27 +149,14 @@ function newmodelsNormalizeAssets(folderPath, folderName, assets, settings)
         end
     end
 
-    if not normalized.dff then
-        normalized.dff = folderPath .. "/model.dff"
-        if not fileExists(normalized.dff) then
-            normalized.dff = folderPath .. "/" .. folderName .. ".dff"
-        end
+    if normalized.dff and not fileExists(normalized.dff) then
+        normalized.dff = nil
     end
-
-    if not normalized.txd then
-        local localTxd = folderPath .. "/model.txd"
-        if fileExists(localTxd) then
-            normalized.txd = localTxd
-        end
+    if normalized.txd and not fileExists(normalized.txd) then
+        normalized.txd = nil
     end
-
-    if not normalized.col then
-        local localCol = folderPath .. "/model.col"
-        if fileExists(localCol) then
-            normalized.col = localCol
-        elseif fileExists(folderPath .. "/" .. folderName .. ".col") then
-            normalized.col = folderPath .. "/" .. folderName .. ".col"
-        end
+    if normalized.col and not fileExists(normalized.col) then
+        normalized.col = nil
     end
 
     return normalized

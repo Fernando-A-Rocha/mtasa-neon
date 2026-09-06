@@ -47,6 +47,11 @@ local function applyModel(entry)
 
     local settings = entry.settings or {}
     local assets = entry.assets or {}
+    if not assets.dff and not assets.txd and not assets.col then
+        newmodelsLog("catalog entry has no replaceable assets: " .. entry.qualifiedName, 1)
+        return false
+    end
+
     local colElement, txdElement, dffElement
 
     if assets.col then
