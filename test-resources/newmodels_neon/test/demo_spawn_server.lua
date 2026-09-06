@@ -56,7 +56,7 @@ addEventHandler("onResourceStop", resourceRoot, function()
     clearDemoElements()
 end)
 
-addCommandHandler("newmodelspawn", function(player, modelName)
+addCommandHandler("newmodelspawn", function(player, _, modelName)
     if not isElement(player) then
         return
     end
