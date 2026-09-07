@@ -29,6 +29,11 @@ players; no persistent synced-player set is kept.
 
 Place models under `models/<type>/<parent>/<name>/`:
 
+The `<parent>` folder is the **base model** the replacement inherits from:
+
+- **Numeric ID** — e.g. `411`, `1337`, `7` (works for vehicle, ped, and object)
+- **Vehicle name** — e.g. `Infernus` instead of `411`; resolved with `getVehicleModelFromName` (vehicles only)
+
 ```text
 models/
   object/
@@ -41,6 +46,7 @@ models/
     7/                 # demo_gangster (models/)
   vehicle/
     400/               # landstalker_86, landstalker_98
+    Infernus/          # same as 411/ — vehicle-name parent folder
     462/               # demo_faggio
     468/               # sanchez_test (DFF only)
     489/               # landstalker_02

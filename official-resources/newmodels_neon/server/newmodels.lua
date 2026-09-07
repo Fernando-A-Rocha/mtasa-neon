@@ -170,6 +170,24 @@ local function isValidParent(modelType, parent)
     return parent >= 0 and parent <= 20000
 end
 
+-- Parent folders may use a numeric base model ID (411) or, for vehicles, a GTA
+-- vehicle name resolved through getVehicleModelFromName (e.g. Infernus).
+local function resolveParentId(modelType, parentName)
+    local parent = tonumber(parentName)
+    if parent and isValidParent(modelType, parent) then
+        return parent
+    end
+
+    if modelType == "vehicle" then
+        parent = getVehicleModelFromName(parentName)
+        if parent and isValidParent(modelType, parent) then
+            return parent
+        end
+    end
+
+    return false
+end
+
 local function collectModelFolder(modelType, parent, folderName, folderPath)
     local assets = {}
     local settings = {}
@@ -231,8 +249,8 @@ local function scanFolder(resourceName)
             local parentNames = pathListDir(typePath) or {}
             for j = 1, #parentNames do
                 local parentName = parentNames[j]
-                local parent = tonumber(parentName)
-                if parent and isValidParent(modelType, parent) then
+                local parent = resolveParentId(modelType, parentName)
+                if parent then
                     local parentPath = typePath .. "/" .. parentName
                     if pathIsDirectory(parentPath) then
                         local folderNames = pathListDir(parentPath) or {}
