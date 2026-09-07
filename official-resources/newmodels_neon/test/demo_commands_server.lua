@@ -1,4 +1,4 @@
--- Optional test harness: spawns one model by custom name, MTA model ID, or vehicle name.
+-- Optional test harness: /newmodelspawn and /newmodelinfo.
 -- Safe to remove from meta.xml on production servers that supply their own models/ tree.
 
 local function describeVanillaModel(modelId, modelType)
@@ -11,20 +11,33 @@ local function describeVanillaModel(modelId, modelType)
     return tostring(modelId)
 end
 
+local function resolveCustomModel(identifier)
+    local logicalId = engineGetModelIDFromName(identifier)
+    if not logicalId and not identifier:find(":", 1, true) then
+        logicalId = engineGetModelIDFromName(getResourceName(resource) .. ":" .. identifier)
+    end
+    if not logicalId then
+        return false
+    end
+
+    local name = engineGetModelName(logicalId) or identifier
+    local modelType = engineGetModelType(logicalId) or "object"
+    return {
+        model = logicalId,
+        type = modelType,
+        label = getResourceName(resource) .. ":" .. name,
+        source = "custom",
+    }
+end
+
 local function resolveSpawnModel(identifier)
     if not identifier or identifier == "" then
         return false, "usage: /newmodelspawn <custom-name|model-id|vehicle-name>"
     end
 
-    local customId = exports[NEWMODELS_RESOURCE]:getModelId(identifier)
-    if customId then
-        local definition = exports[NEWMODELS_RESOURCE]:getModelDefinition(identifier)
-        return {
-            model = customId,
-            type = definition and definition.type or "object",
-            label = definition and definition.qualifiedName or identifier,
-            source = "custom",
-        }
+    local custom = resolveCustomModel(identifier)
+    if custom then
+        return custom
     end
 
     local numericId = tonumber(identifier)
@@ -125,4 +138,18 @@ addCommandHandler("newmodelspawn", function(player, _, modelName)
     end
 
     outputChatBox("[newmodels_neon] spawned " .. details, player, 120, 220, 255)
+end)
+
+addCommandHandler("newmodelinfo", function(player)
+    local catalog = exports.newmodels_neon:getModelCatalog()
+    local lines = {}
+    for i = 1, #catalog do
+        local entry = catalog[i]
+        lines[#lines + 1] = ("%s=%d parent=%d"):format(entry.qualifiedName, entry.logicalId, entry.parent)
+    end
+    if #lines == 0 then
+        outputChatBox("[newmodels_neon] no models registered.", player, 255, 190, 80)
+        return
+    end
+    outputChatBox("[newmodels_neon] " .. table.concat(lines, " | "), player, 120, 220, 255)
 end)
