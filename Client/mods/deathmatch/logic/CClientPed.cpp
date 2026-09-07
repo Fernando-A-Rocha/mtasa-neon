@@ -9,6 +9,8 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include "CClientCargoManager.h"
+#include <game/CNativeUI.h>
 #include "CNativeAITelemetry.h"
 #include <game/CAEVehicleAudioEntity.h>
 #include <game/CAnimBlendAssocGroup.h>
@@ -804,6 +806,7 @@ void CClientPed::Init(CClientManager* pManager, unsigned long ulModelID, bool bI
 
 CClientPed::~CClientPed()
 {
+    CClientCargoManager::GetSingleton().OnEntityDestroy(this);
     // _DestroyModel owns the normal release. This covers streamed-out and
     // exceptional teardown paths as well, without leaving a stale residence.
     ReleaseNativeCollisionResidency("destructor");
@@ -4938,6 +4941,10 @@ void CClientPed::ApplyControllerStateFixes(CControllerState& Current)
         bool bOnFoot = pVehicle ? false : true;
         CClientPad::ProcessAllToggledControls(Current, bOnFoot);
         CClientPad::ProcessSetAnalogControlState(Current, bOnFoot);
+        // A native menu consumes only this effective input frame. No saved
+        // bind or persistent control-disable flag needs restoration on stop.
+        if (g_pGame->GetNativeUI()->CaptureInput(Current, g_pCore->IsChatInputEnabled() || g_pCore->IsMenuVisible() || g_pCore->GetConsole()->IsVisible()))
+            Current = CControllerState{};
     }
 
     // Is the player stealth aiming?
@@ -6217,6 +6224,7 @@ void CClientPed::ClearNativeAmbientOwnerCollisionFence(const char* reason, bool 
 
 void CClientPed::_DestroyModel()
 {
+    CClientCargoManager::GetSingleton().OnEntityDestroy(this);
     UpdateNativeCollisionAuthorityFence(false, "destroy_model");
     ReleaseNativeCollisionResidency("destroy_model");
     m_remoteReplicaPhysicsFenceActive = false;
@@ -6343,6 +6351,7 @@ void CClientPed::_DestroyModel()
 
 void CClientPed::_DestroyLocalModel()
 {
+    CClientCargoManager::GetSingleton().OnEntityDestroy(this);
     /* Eventually remove from vehicle
         MUST use internal-func, to save the the occupied-vehicle (streaming) */
     CClientVehicle* pVehicle = GetRealOccupiedVehicle();

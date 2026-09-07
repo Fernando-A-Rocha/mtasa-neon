@@ -10,6 +10,7 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include <game/CNativeUI.h>
 #include <game/CCoronas.h>
 #include <shellapi.h>
 #include <net/SyncStructures.h>
@@ -877,6 +878,21 @@ void CClientGame::DoPulsePreFrame()
 
 void CClientGame::DoPulsePreHUDRender(bool bDidUnminimize, bool bDidRecreateRenderTargets)
 {
+    g_pGame->GetNativeUI()->Pulse(g_pCore->IsChatInputEnabled() || g_pCore->IsMenuVisible() || g_pCore->GetConsole()->IsVisible());
+    // Dispatch outside native rendering/input scopes. A callback may release
+    // its resource or create a new generation without invalidating a GTA call.
+    SNativeUIEvent nativeEvent;
+    while (g_pGame->GetNativeUI()->PollEvent(nativeEvent))
+    {
+        auto*         resource = static_cast<CResource*>(nativeEvent.owner);
+        CLuaArguments arguments;
+        arguments.PushNumber(nativeEvent.handle);
+        arguments.PushString(nativeEvent.action.c_str());
+        arguments.PushNumber(nativeEvent.selection + 1);
+        arguments.PushNumber(nativeEvent.color);
+        resource->GetResourceEntity()->CallEvent("onClientNativeUI", arguments, false);
+    }
+
     // Allow scripted dxSetRenderTarget for old scripts
     g_pCore->GetGraphics()->GetRenderItemManager()->EnableSetRenderTargetOldVer(true);
 
@@ -2768,6 +2784,7 @@ void CClientGame::AddBuiltInEvents()
     m_Events.AddEvent("onClientPedWasted", "", NULL, false);
     m_Events.AddEvent("onClientPedChoke", "", NULL, false);
     m_Events.AddEvent("onClientPedHeliKilled", "heli", NULL, false);
+    m_Events.AddEvent("onClientPedCarryStateChange", "object, state, reason", NULL, false);
     m_Events.AddEvent("onClientPedHitByWaterCannon", "vehicle", NULL, false);
     m_Events.AddEvent("onClientPedStep", "foot", nullptr, false);
 
@@ -2825,6 +2842,7 @@ void CClientGame::AddBuiltInEvents()
     // Game events
     m_Events.AddEvent("onClientPreRender", "", NULL, false);
     m_Events.AddEvent("onClientPedsProcessed", "", NULL, false);
+    m_Events.AddEvent("onClientNativeUI", "handle, action, selection, color", NULL, false);
     m_Events.AddEvent("onClientHUDRender", "", NULL, false);
     m_Events.AddEvent("onClientRender", "", NULL, false);
     m_Events.AddEvent("onClientMinimize", "", NULL, false);
