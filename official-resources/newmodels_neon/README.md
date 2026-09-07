@@ -48,12 +48,6 @@ models/
     520/               # demo_hydra
 ```
 
-Bundled example assets come from
-[mta-add-models/newmodels_red](https://github.com/Fernando-A-Rocha/mta-add-models/tree/main/newmodels_red/models)
-and
-[models_alt/s_mod_list.lua](https://github.com/Fernando-A-Rocha/mta-add-models/blob/main/newmodels_red/models_alt/s_mod_list.lua)
-(Elegant/nandocrypt entry excluded).
-
 Supported types: `vehicle`, `object`, `ped`.
 
 Each model folder must provide **at least one** of DFF, TXD, or COL. Any combination is valid
@@ -72,11 +66,38 @@ automatically.
 
 ## Server usage
 
-After `newmodels_neon` starts, resolve logical IDs with engine natives and use them in
-normal element APIs:
+After `newmodels_neon` starts, resolve a vanilla vehicle ID or a registered custom model
+name to the ID `createVehicle` expects (vanilla GTA ID, or Neon's stable logical ID).
+
+Canonical registry names are always `resource:name`. `engineGetModelIDFromName` accepts an
+unqualified short name, but only by scoping it to the **calling** resource (so `"schafter"`
+from inside `newmodels_neon` becomes `newmodels_neon:schafter`). Callers in another resource
+must pass the qualified name, or retry with the `newmodels_neon:` prefix as below.
 
 ```lua
-local model = engineGetModelIDFromName("newmodels_neon:demo_crate")
+-- idOrName: vanilla ID (411), custom short name ("schafter"), or qualified name
+-- ("newmodels_neon:schafter")
+local function resolveVehicleModel(idOrName)
+    local asNumber = tonumber(idOrName)
+    if asNumber then
+        -- Already a numeric ID: vanilla vehicle range, or a logical ID you already hold.
+        return asNumber
+    end
+
+    local name = tostring(idOrName)
+    local logicalId = engineGetModelIDFromName(name)
+    -- Unqualified names are scoped to the calling resource; retry against this library
+    -- when the caller lives elsewhere and did not pass "newmodels_neon:...".
+    if not logicalId and not name:find(":", 1, true) then
+        logicalId = engineGetModelIDFromName("newmodels_neon:" .. name)
+    end
+    return logicalId -- nil if the name is not registered
+end
+
+local model = resolveVehicleModel("schafter") -- or 411, or "newmodels_neon:schafter"
+if not model then
+    return -- unknown model; do not call createVehicle
+end
 local vehicle = createVehicle(model, x, y, z)
 
 -- Related natives: engineGetModelName, engineGetModelType, engineGetModelParent, engineGetModels
@@ -129,3 +150,14 @@ These require the `test/` scripts listed in `meta.xml`:
 
 - `server-model-registry-test` — low-level engine registry validation
 - [Custom models (Neon wiki)](https://mtasa-neon-wiki.vercel.app/neon/models-and-streaming)
+
+## Credits
+
+- Created by [Fernando-A-Rocha](https://github.com/Fernando-A-Rocha) — original
+  [mta-add-models / newmodels_red](https://github.com/Fernando-A-Rocha/mta-add-models)
+  approach and bundled demo assets (from
+  [newmodels_red/models](https://github.com/Fernando-A-Rocha/mta-add-models/tree/main/newmodels_red/models)
+  and
+  [models_alt/s_mod_list.lua](https://github.com/Fernando-A-Rocha/mta-add-models/blob/main/newmodels_red/models_alt/s_mod_list.lua);
+  Elegant/nandocrypt entry excluded).
+- Thanks to [Dryxio](https://github.com/Dryxio) for [mtasa-neon](https://github.com/Dryxio/mtasa-neon).
