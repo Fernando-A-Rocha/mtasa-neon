@@ -65,7 +65,20 @@ txd=../boxes.txd
 lodDistance=300
 enableDFFAlphaTransparency
 disableTXDTextureFiltering
+wheelSize=0.84,0.84
 ```
+
+`wheelSize` is vehicle-only and optional. Omit it (or leave `wheelSizeFront` /
+`wheelSizeRear` unset) to keep the parent GTA defaults — automobiles are usually
+around 0.7. Each value must be greater than 0. You can also set one axle:
+
+```text
+wheelSizeFront=0.84
+wheelSizeRear=0.84
+```
+
+The client applies this with `setVehicleModelWheelSize` on the local runtime
+vehicle model ID after the replacement is loaded.
 
 `meta.xml` uses `<file src="models/**/*" />` so every asset under `models/` is downloaded
 automatically.
@@ -119,6 +132,10 @@ exports.newmodels_neon:registerModels({
         name = "mission_infernus",
         dff = "assets/infernus.dff",
         txd = "assets/infernus.txd",
+        settings = {
+            -- Omit wheelSize to leave GTA defaults (~0.7) unchanged.
+            wheelSize = { 0.84, 0.84 },
+        },
     },
     {
         type = "vehicle",

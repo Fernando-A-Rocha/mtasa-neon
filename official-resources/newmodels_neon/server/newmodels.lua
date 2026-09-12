@@ -33,6 +33,119 @@ local function joinPath(base, relative)
     return table.concat(parts, "/")
 end
 
+-- Wheel size is a GTA vehicle-model property (front/rear axle). Omit it to
+-- keep the parent model's defaults (automobiles are usually around 0.7).
+-- setVehicleModelWheelSize rejects 0 and negative values.
+local function parsePositiveWheelSize(value)
+    if type(value) == "string" then
+        value = value:gsub("^%s+", ""):gsub("%s+$", "")
+    end
+    local size = tonumber(value)
+    if size and size > 0 then
+        return size
+    end
+    return nil
+end
+
+-- Accepts "0.84, 0.84", a single number (both axles), or { 0.84, 0.84 } /
+-- { front = 0.84, rear = 0.84 }. Missing axles stay nil so GTA defaults remain.
+local function parseWheelSizeSetting(value)
+    if value == nil then
+        return true, nil, nil
+    end
+
+    if type(value) == "table" then
+        local frontRaw = value.front
+        if frontRaw == nil then
+            frontRaw = value[1]
+        end
+        local rearRaw = value.rear
+        if rearRaw == nil then
+            rearRaw = value[2]
+        end
+
+        local front, rear
+        if frontRaw ~= nil and frontRaw ~= false then
+            front = parsePositiveWheelSize(frontRaw)
+            if not front then
+                return false
+            end
+        end
+        if rearRaw ~= nil and rearRaw ~= false then
+            rear = parsePositiveWheelSize(rearRaw)
+            if not rear then
+                return false
+            end
+        end
+        return true, front, rear
+    end
+
+    if type(value) == "number" then
+        local size = parsePositiveWheelSize(value)
+        if not size then
+            return false
+        end
+        return true, size, size
+    end
+
+    if type(value) == "string" then
+        local left, right = value:match("^([^,]+),(.+)$")
+        if left then
+            local front = parsePositiveWheelSize(left)
+            local rear = parsePositiveWheelSize(right)
+            if not front or not rear then
+                return false
+            end
+            return true, front, rear
+        end
+
+        local size = parsePositiveWheelSize(value)
+        if not size then
+            return false
+        end
+        return true, size, size
+    end
+
+    return false
+end
+
+local function applyWheelSizeSettings(settings, modelType)
+    local front, rear
+    local pair = settings.wheelSize
+    -- Catalog clients only need the resolved axle numbers.
+    settings.wheelSize = nil
+
+    if pair ~= nil and pair ~= false then
+        local ok, pairFront, pairRear = parseWheelSizeSetting(pair)
+        if not ok then
+            return false, "invalid wheelSize (use values greater than 0, e.g. 0.84, 0.84)"
+        end
+        front, rear = pairFront, pairRear
+    end
+
+    -- false/nil means "leave this axle on GTA defaults"; 0 and negatives are rejected.
+    if settings.wheelSizeFront ~= nil and settings.wheelSizeFront ~= false then
+        front = parsePositiveWheelSize(settings.wheelSizeFront)
+        if not front then
+            return false, "wheelSizeFront must be greater than 0"
+        end
+    end
+    if settings.wheelSizeRear ~= nil and settings.wheelSizeRear ~= false then
+        rear = parsePositiveWheelSize(settings.wheelSizeRear)
+        if not rear then
+            return false, "wheelSizeRear must be greater than 0"
+        end
+    end
+
+    if (front or rear) and modelType ~= "vehicle" then
+        return false, "wheelSize can only be set on vehicle models"
+    end
+
+    settings.wheelSizeFront = front
+    settings.wheelSizeRear = rear
+    return true
+end
+
 local function parseSettingLine(line, settings, folderPath)
     line = line:gsub("\r", ""):gsub("^%s+", ""):gsub("%s+$", "")
     if line == "" or line:sub(1, 1) == "#" then
@@ -56,6 +169,11 @@ local function parseSettingLine(line, settings, folderPath)
     if key == "lodDistance" then
         settings.lodDistance = tonumber(value)
         return settings.lodDistance ~= nil
+    end
+
+    if key == "wheelSize" or key == "wheelSizeFront" or key == "wheelSizeRear" then
+        settings[key] = value
+        return true
     end
 
     if key == "txd" or key == "dff" or key == "col" then
@@ -212,6 +330,11 @@ local function collectModelFolder(modelType, parent, folderName, folderPath)
         end
     end
 
+    local wheelOk, wheelReason = applyWheelSizeSettings(settings, modelType)
+    if not wheelOk then
+        return false, wheelReason .. ": " .. folderPath
+    end
+
     local normalizedAssets = normalizeAssets(folderPath, folderName, assets, settings)
     if countAssets(normalizedAssets) == 0 then
         return false, "model folder must provide at least one DFF, TXD, or COL: " .. folderPath
@@ -316,13 +439,24 @@ local function normalizeExternalDefinition(resourceName, definition)
         return false, "at least one of dff, txd, or col is required"
     end
 
+    local settings = {}
+    if type(definition.settings) == "table" then
+        for key, value in pairs(definition.settings) do
+            settings[key] = value
+        end
+    end
+    local wheelOk, wheelReason = applyWheelSizeSettings(settings, definition.type)
+    if not wheelOk then
+        return false, wheelReason
+    end
+
     return {
         type = definition.type,
         parent = definition.parent,
         name = definition.name,
         qualifiedName = qualifyName(resourceName, definition.name),
         assets = assets,
-        settings = type(definition.settings) == "table" and definition.settings or {},
+        settings = settings,
         sourceResource = resourceName,
     }
 end

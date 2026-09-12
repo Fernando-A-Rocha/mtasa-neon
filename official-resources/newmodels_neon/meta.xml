@@ -1,5 +1,5 @@
 <meta>
-    <info author="MTA Neon" name="Newmodels Neon" type="script" version="1.0.0" description="Server-authoritative custom model registry with client asset streaming." />
+    <info author="Fernando-A-Rocha" name="Newmodels Neon" type="script" version="1.0.1" description="Server-authoritative custom model registry with client asset streaming." />
 
     <!-- Production library: server registry/scan and client asset loading only.
          No shared scripts — folder scan and settings helpers stay server-side. -->
@@ -15,7 +15,7 @@
     <script src="test/demo_commands_server.lua" type="server" />
     <script src="test/demo_inspect_client.lua" type="client" cache="false" />
 
-    <!-- Example model assets (optional): glob your own models/ tree or remove demo folders. -->
+    <!-- Model assets (glob your own models/ tree or remove demo folders). -->
     <file src="models/**/*" />
 
     <export function="getModelCatalog" type="server" />

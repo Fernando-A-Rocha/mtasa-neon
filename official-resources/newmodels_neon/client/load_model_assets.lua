@@ -5,6 +5,10 @@ local DEFAULT_SETTINGS = {
     lodDistance = false,
     enableDFFAlphaTransparency = false,
     disableTXDTextureFiltering = false,
+    -- nil/false means do not call setVehicleModelWheelSize; GTA keeps the
+    -- parent automobile default (usually around 0.7).
+    wheelSizeFront = false,
+    wheelSizeRear = false,
 }
 
 local catalog = {}
@@ -22,6 +26,75 @@ local function getSetting(settings, key)
     return DEFAULT_SETTINGS[key]
 end
 
+-- set/getVehicleModelWheelSize raise on invalid model or size instead of returning false.
+local function callModelWheelSize(fn, runtimeId, ...)
+    local ok, result = pcall(fn, runtimeId, ...)
+    if not ok then
+        return false, result
+    end
+    return true, result
+end
+
+local function captureWheelSizes(runtimeId)
+    local ok, sizes = callModelWheelSize(getVehicleModelWheelSize, runtimeId, "all_wheels")
+    if ok and type(sizes) == "table" then
+        return sizes
+    end
+    return nil
+end
+
+local function restoreWheelSizes(runtimeId, original)
+    if not original then
+        return
+    end
+    local front = original.front_axle
+    local rear = original.rear_axle
+    if type(front) == "number" and front > 0 then
+        callModelWheelSize(setVehicleModelWheelSize, runtimeId, "front_axle", front)
+    end
+    if type(rear) == "number" and rear > 0 then
+        callModelWheelSize(setVehicleModelWheelSize, runtimeId, "rear_axle", rear)
+    end
+end
+
+-- Wheel size can only be set clientside, and the native wants this client's
+-- vehicle model ID (the runtime slot), not the server logical ID.
+local function applyVehicleWheelSize(runtimeId, settings)
+    local front = getSetting(settings, "wheelSizeFront")
+    local rear = getSetting(settings, "wheelSizeRear")
+    local setFront = type(front) == "number" and front > 0
+    local setRear = type(rear) == "number" and rear > 0
+    if not setFront and not setRear then
+        return nil
+    end
+
+    local original = captureWheelSizes(runtimeId)
+
+    local function setGroup(wheelGroup, wheelSize)
+        local ok, result = callModelWheelSize(setVehicleModelWheelSize, runtimeId, wheelGroup, wheelSize)
+        if not ok then
+            logMessage(
+                "setVehicleModelWheelSize(" ..
+                wheelGroup .. ") failed for runtime model " .. runtimeId .. ": " .. tostring(result),
+                1
+            )
+        end
+    end
+
+    if setFront and setRear and front == rear then
+        setGroup("all_wheels", front)
+    else
+        if setFront then
+            setGroup("front_axle", front)
+        end
+        if setRear then
+            setGroup("rear_axle", rear)
+        end
+    end
+
+    return original
+end
+
 local function unloadModel(logicalId)
     local state = loaded[logicalId]
     if not state then
@@ -30,6 +103,7 @@ local function unloadModel(logicalId)
 
     local runtimeId = engineGetModelRuntimeID(logicalId)
     if runtimeId then
+        restoreWheelSizes(runtimeId, state.originalWheelSize)
         engineRestoreCOL(runtimeId)
         engineRestoreModel(runtimeId)
     end
@@ -136,12 +210,18 @@ local function applyModel(entry)
         engineSetModelLODDistance(runtimeId, lodDistance)
     end
 
+    local originalWheelSize
+    if entry.type == "vehicle" then
+        originalWheelSize = applyVehicleWheelSize(runtimeId, settings)
+    end
+
     loaded[logicalId] = {
         runtimeId = runtimeId,
         colElement = colElement,
         txdElement = txdElement,
         dffElement = dffElement,
         qualifiedName = entry.qualifiedName,
+        originalWheelSize = originalWheelSize,
     }
 
     return true
