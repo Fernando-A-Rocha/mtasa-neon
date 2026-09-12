@@ -242,10 +242,32 @@ struct SAmbientPedPopulationProfile
     unsigned char noCops{};
     unsigned char worldLevel{};
     unsigned char copSuppressionFlags{};
+    unsigned char otherPedPercentage{};
     unsigned char gangWeights[10]{};
     char          zoneLabel[8]{};
 };
 static_assert(sizeof(SAmbientPedPopulationProfile) == 76, "Ambient population profile ABI changed");
+
+enum class EAmbientPedPopulationProfileResult : unsigned char
+{
+    Success,
+    Inactive,
+    ZoneUnavailable,
+    ZoneInfoUnavailable,
+    ZonePointerInvalid,
+    ZoneInfoPointerInvalid,
+    TargetCalculationFailed,
+    PedDensityInvalid,
+    MaximumPedsInvalid,
+    CreationDistanceInvalid,
+    GenerationDistanceInvalid,
+    ZoneTypeInvalid,
+    TimeIndexInvalid,
+    WeekendInvalid,
+    OtherPedPercentageInvalid,
+    WorldLevelInvalid,
+    TargetInvalid,
+};
 
 // A read-only proposal produced by GTA's stock population rules. The caller
 // still owns the network element and its lifetime; Game SA never creates an
@@ -439,16 +461,30 @@ struct SAmbientVehicleOccupantModelCandidate
     unsigned char count{};
 };
 
-// GenerateCarCreationCoors2 owns only GTA's local path/camera query. The
-// returned scalars are safe to transport; path-node addresses deliberately
-// stay inside the proposing process because streamed path areas can differ
-// between clients and across an ownership epoch.
+// GenerateCarCreationCoors2 owns only GTA's local path/camera query. The road
+// identifiers below are diagnostic evidence from the proposing process, not a
+// portable route handle: streamed path areas can differ between clients and
+// across an ownership epoch, so callers must never feed them back into GTA.
 struct SAmbientVehicleSpawnCandidate
 {
     CVector       position{};
     float         rotationDegrees{};
     unsigned int  modelId{};
     float         cruiseSpeed{};
+    float         pathLerp{};
+    float         laneOffsetMeters{};
+    unsigned int  pathNodeAArea{};
+    unsigned int  pathNodeAId{};
+    unsigned int  pathNodeBArea{};
+    unsigned int  pathNodeBId{};
+    unsigned int  carLinkArea{};
+    unsigned int  carLinkId{};
+    unsigned int  laneCount{};
+    unsigned int  laneIndex{};
+    float         queryDirectionX{};
+    float         queryDirectionY{};
+    float         queryDotLimit{};
+    bool          queryRequireInsideCone{};
     unsigned char vehicleClass{};
     unsigned char drivingStyle{};
 };
@@ -763,21 +799,21 @@ public:
     // Ambient traffic uses GTA as a placement/model oracle while keeping
     // entity creation, ownership and cleanup under the multiplayer runtime.
     // Append-only: CGame is shared across the Game SA/Client modules.
-    virtual void                            UpdateAmbientPedPopulationModels(const CVector& origin) = 0;
-    virtual void                            ResetAmbientPedPopulationModels() = 0;
-    virtual EAmbientPedSpawnCandidateResult GetAmbientPedSpawnCandidate(const CVector& origin, SAmbientPedSpawnCandidate& candidate) = 0;
-    virtual bool                            GetAmbientPedPopulationProfile(SAmbientPedPopulationProfile& profile) const = 0;
-    virtual bool                            ResetAmbientPedPopulationZonesToBootstrap() = 0;
-    virtual bool                            SetAmbientPedPopulationZoneState(const char* label, const SAmbientPedPopulationZoneState& state) = 0;
-    virtual EAmbientPedSpawnCandidateResult GetAmbientPedSpawnCandidateForPopulation(const CVector& origin, EAmbientPedPopulationSelection selection,
-                                                                                     unsigned char gangId, SAmbientPedSpawnCandidate& candidate) = 0;
-    virtual EAmbientPedSpawnCandidateResult GetAmbientPedGangGroupCandidate(const CVector& origin, unsigned char gangId, unsigned char maxMembers,
-                                                                            SAmbientPedGroupSpawnCandidate& candidate) = 0;
-    virtual bool                            AcquireAmbientPedNativeGroup(CPed* const* members, unsigned char count, unsigned int& nativeGroupId) = 0;
-    virtual bool                            ReleaseAmbientPedNativeGroup(unsigned int nativeGroupId, CPed* const* members, unsigned char count) = 0;
-    virtual bool                            IsAmbientPedNativeGroupActive(unsigned int nativeGroupId, CPed* const* members, unsigned char count) const = 0;
-    virtual void                            GetAmbientPedNativeGroupDiagnostic(unsigned int nativeGroupId, CPed* const* members, unsigned char count,
-                                                                               SAmbientPedNativeGroupDiagnostic& diagnostic) const = 0;
+    virtual bool                               UpdateAmbientPedPopulationModels(const CVector& origin) = 0;
+    virtual void                               ResetAmbientPedPopulationModels() = 0;
+    virtual EAmbientPedSpawnCandidateResult    GetAmbientPedSpawnCandidate(const CVector& origin, SAmbientPedSpawnCandidate& candidate) = 0;
+    virtual EAmbientPedPopulationProfileResult GetAmbientPedPopulationProfile(SAmbientPedPopulationProfile& profile) const = 0;
+    virtual bool                               ResetAmbientPedPopulationZonesToBootstrap() = 0;
+    virtual bool                               SetAmbientPedPopulationZoneState(const char* label, const SAmbientPedPopulationZoneState& state) = 0;
+    virtual EAmbientPedSpawnCandidateResult    GetAmbientPedSpawnCandidateForPopulation(const CVector& origin, EAmbientPedPopulationSelection selection,
+                                                                                        unsigned char gangId, SAmbientPedSpawnCandidate& candidate) = 0;
+    virtual EAmbientPedSpawnCandidateResult    GetAmbientPedGangGroupCandidate(const CVector& origin, unsigned char gangId, unsigned char maxMembers,
+                                                                               SAmbientPedGroupSpawnCandidate& candidate) = 0;
+    virtual bool                               AcquireAmbientPedNativeGroup(CPed* const* members, unsigned char count, unsigned int& nativeGroupId) = 0;
+    virtual bool                               ReleaseAmbientPedNativeGroup(unsigned int nativeGroupId, CPed* const* members, unsigned char count) = 0;
+    virtual bool                               IsAmbientPedNativeGroupActive(unsigned int nativeGroupId, CPed* const* members, unsigned char count) const = 0;
+    virtual void                               GetAmbientPedNativeGroupDiagnostic(unsigned int nativeGroupId, CPed* const* members, unsigned char count,
+                                                                                  SAmbientPedNativeGroupDiagnostic& diagnostic) const = 0;
     // Append-only diagnostic ABI: keep these at the end so enabling telemetry
     // does not move any established CGame virtual slot.
     virtual void SetNativeAIGroupDecisionHandler(NativeAIGroupDecisionHandler* pHandler) = 0;

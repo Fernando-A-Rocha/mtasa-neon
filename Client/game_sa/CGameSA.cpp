@@ -51,6 +51,7 @@
 #include "CPickupsSA.h"
 #include "CPlayerInfoSA.h"
 #include "CPointLightsSA.h"
+#include "CPhysicalSA.h"
 #include "CProjectileInfoSA.h"
 #include "CRadarSA.h"
 #include "CRopesSA.h"
@@ -229,8 +230,17 @@ namespace
         return true;
     }
 
-    bool GetAmbientVehicleLaneOffset(const SAmbientVehicleNodeAddressSA& from, const SAmbientVehicleNodeAddressSA& to, unsigned int modelId,
-                                     VehicleClass vehicleClass, float& offsetMeters)
+    struct SAmbientVehicleLaneSelection
+    {
+        float        offsetMeters{};
+        unsigned int carLinkArea{};
+        unsigned int carLinkId{};
+        unsigned int laneCount{};
+        unsigned int laneIndex{};
+    };
+
+    bool GetAmbientVehicleLaneSelection(const SAmbientVehicleNodeAddressSA& from, const SAmbientVehicleNodeAddressSA& to, unsigned int modelId,
+                                        VehicleClass vehicleClass, SAmbientVehicleLaneSelection& selection)
     {
         constexpr unsigned int PATH_AREA_COUNT = 64;
         constexpr unsigned int PATH_NODE_ARRAY_OFFSET = 0x804;
@@ -291,20 +301,29 @@ namespace
         const unsigned char laneFlags = carLink[0x0B];
         const unsigned int  lanesTowardAttached = laneFlags & 0x07;
         const unsigned int  lanesAwayFromAttached = (laneFlags >> 3) & 0x07;
-        const unsigned int  laneCount = attachedToTo ? lanesTowardAttached : lanesAwayFromAttached;
-        if (laneCount == 0 || ((modelId == 431 || modelId == 437) && laneCount < 2) || (vehicleClass == VehicleClass::BMX && laneCount >= 2))
+
+        // Retail GenerateOneRandomCar selects the low lane bits when the car
+        // link is attached to the target node and the high bits otherwise.
+        // Older reverse-engineered names invert every one-way carriageway.
+        selection.laneCount = attachedToTo ? lanesTowardAttached : lanesAwayFromAttached;
+        if (selection.laneCount == 0 || ((modelId == 431 || modelId == 437) && selection.laneCount < 2) ||
+            (vehicleClass == VehicleClass::BMX && selection.laneCount >= 2))
             return false;
 
-        const float oneWayOffset = lanesTowardAttached == 0      ? 0.5f - 0.5f * lanesAwayFromAttached
+        const float oneWayOffset = lanesTowardAttached == 0     ? 0.5f - 0.5f * lanesAwayFromAttached
                                    : lanesAwayFromAttached == 0 ? 0.5f - 0.5f * lanesTowardAttached
-                                                                 : static_cast<float>(carLink[0x0A]) * (1.0f / 86.4f) + 0.5f;
-        offsetMeters = (oneWayOffset + rand() % laneCount) * 5.4f;
+                                                                : static_cast<float>(carLink[0x0A]) * (1.0f / 86.4f) + 0.5f;
+        selection.carLinkArea = carLinkArea;
+        selection.carLinkId = carLinkId;
+        selection.laneIndex = rand() % selection.laneCount;
+        selection.offsetMeters = (oneWayOffset + selection.laneIndex) * 5.4f;
         if (vehicleClass == VehicleClass::BMX)
-            offsetMeters += 1.458f;
-        return std::isfinite(offsetMeters) && std::abs(offsetMeters) <= 50.0f;
+            selection.offsetMeters += 1.458f;
+        return std::isfinite(selection.offsetMeters) && std::abs(selection.offsetMeters) <= 50.0f;
     }
     constexpr std::uintptr_t GTA_NAVIGATION_ZONE_ARRAY = 0xBA3798;
     constexpr std::uintptr_t GTA_ZONE_INFO_ARRAY = 0xBA1DF0;
+    constexpr std::uintptr_t FUNC_GetZoneInfoForPosition = 0x572400;
     constexpr std::uintptr_t GTA_CURRENT_POPCYCLE_ZONE = 0xC0BC64;
     constexpr std::uintptr_t GTA_CURRENT_POPCYCLE_ZONE_INFO = 0xC0BC68;
     constexpr std::uintptr_t GTA_CAR_GROUP_COUNTS = 0xC0EC78;
@@ -485,12 +504,13 @@ namespace
         float dealer{};
     };
 
-    bool CalculateAmbientPedPopulationTargets(const SAmbientPedPopulationZoneInfoSA* zoneInfo, int timeIndex, int weekend, int zoneType,
+    bool CalculateAmbientPedPopulationTargets(const SAmbientPedPopulationZoneInfoSA* zoneInfo, int timeIndex, int weekend, int zoneType, int otherPedPercentage,
                                               SAmbientPedPopulationTargetsSA& targets)
     {
         targets = {};
         if (!zoneInfo || timeIndex < 0 || timeIndex >= static_cast<int>(POPCYCLE_TIME_COUNT) || weekend < 0 ||
-            weekend >= static_cast<int>(POPCYCLE_WEEK_COUNT) || zoneType < 0 || zoneType >= static_cast<int>(POPCYCLE_ZONE_COUNT))
+            weekend >= static_cast<int>(POPCYCLE_WEEK_COUNT) || zoneType < 0 || zoneType >= static_cast<int>(POPCYCLE_ZONE_COUNT) || otherPedPercentage < 0 ||
+            otherPedPercentage > 100)
         {
             return false;
         }
@@ -534,10 +554,7 @@ namespace
         const auto* gangPercentages = reinterpret_cast<const unsigned char*>(GTA_POPCYCLE_GANG_PERCENTAGES);
         const auto* dealerPercentages = reinterpret_cast<const unsigned char*>(GTA_POPCYCLE_DEALER_PERCENTAGES);
         const float maximumPeds = static_cast<float>(maxPeds[index]);
-        // The retail function returns its integer percentage in EAX. Treating it as
-        // an x87 float reads stale floating-point state and intermittently corrupts
-        // the ambient population target.
-        const float otherPercentage = static_cast<float>(reinterpret_cast<int(__cdecl*)()>(FUNC_GetCurrentPercOtherPeds)()) / 100.0f;
+        const float otherPercentage = static_cast<float>(otherPedPercentage) / 100.0f;
         targets.civilian = maximumPeds * civilianShare * otherPercentage;
         targets.cop = maximumPeds * copShare * static_cast<float>(copPercentages[index]) / 100.0f;
         targets.gang = maximumPeds * gangShare * static_cast<float>(gangPercentages[index]) / 100.0f;
@@ -1497,7 +1514,7 @@ bool CGameSA::ReleaseDetachedNativeWorldSession(const SNativeWorldStartupSelecti
     return CNativeWorldPackManagerSA::ReleaseDetachedRuntimeSession(expectedSelection, error);
 }
 
-void CGameSA::UpdateAmbientPedPopulationModels(const CVector& origin)
+bool CGameSA::UpdateAmbientPedPopulationModels(const CVector& origin)
 {
     if (!m_areAmbientPedPopulationModelsActive)
     {
@@ -1510,6 +1527,55 @@ void CGameSA::UpdateAmbientPedPopulationModels(const CVector& origin)
         m_ambientPedGangModelRotation = 0;
     }
     m_ambientPedPopulationOriginZ = origin.fZ;
+    m_ambientPedPopulationZone = nullptr;
+    m_ambientPedPopulationZoneInfo = nullptr;
+    m_ambientPedPopulationZoneType = -1;
+    m_ambientPedPopulationTimeIndex = -1;
+    m_ambientPedPopulationWeekend = -1;
+    m_ambientPedPopulationWorldLevel = -1;
+    m_ambientPedPopulationOtherPercentage = -1;
+
+    if (!std::isfinite(origin.fX) || !std::isfinite(origin.fY) || !std::isfinite(origin.fZ))
+        return false;
+
+    SAmbientPedNavigationZoneSA* zone = nullptr;
+    auto*                        zoneInfo =
+        reinterpret_cast<SAmbientPedPopulationZoneInfoSA*(__cdecl*)(const CVector&, SAmbientPedNavigationZoneSA**)>(FUNC_GetZoneInfoForPosition)(origin, &zone);
+    const auto zoneAddress = reinterpret_cast<std::uintptr_t>(zone);
+    const auto zoneInfoAddress = reinterpret_cast<std::uintptr_t>(zoneInfo);
+    if (!zone || zoneAddress < GTA_NAVIGATION_ZONE_ARRAY || zoneAddress >= GTA_NAVIGATION_ZONE_ARRAY + 380 * sizeof(SAmbientPedNavigationZoneSA) ||
+        (zoneAddress - GTA_NAVIGATION_ZONE_ARRAY) % sizeof(SAmbientPedNavigationZoneSA) != 0)
+    {
+        return false;
+    }
+    if (!zoneInfo || zoneInfoAddress < GTA_ZONE_INFO_ARRAY || zoneInfoAddress >= GTA_ZONE_INFO_ARRAY + 380 * sizeof(SAmbientPedPopulationZoneInfoSA) ||
+        (zoneInfoAddress - GTA_ZONE_INFO_ARRAY) % sizeof(SAmbientPedPopulationZoneInfoSA) != 0)
+    {
+        return false;
+    }
+
+    m_ambientPedPopulationZone = zone;
+    m_ambientPedPopulationZoneInfo = zoneInfo;
+    m_ambientPedPopulationZoneType = zoneInfo->populationFlags & 0x1F;
+    m_ambientPedPopulationTimeIndex = *reinterpret_cast<const int*>(GTA_POPCYCLE_TIME_INDEX);
+    m_ambientPedPopulationWeekend = *reinterpret_cast<const int*>(GTA_POPCYCLE_WEEKEND);
+    m_ambientPedPopulationWorldLevel = zone->level;
+
+    // StreamZoneModels ignores its position argument and consumes these
+    // PopCycle globals instead. Establish the same context explicitly from
+    // the caller's origin so model streaming, profile reads and native model
+    // selectors cannot observe an unrelated or still-null player cache.
+    *reinterpret_cast<SAmbientPedNavigationZoneSA**>(GTA_CURRENT_POPCYCLE_ZONE) = zone;
+    *reinterpret_cast<SAmbientPedPopulationZoneInfoSA**>(GTA_CURRENT_POPCYCLE_ZONE_INFO) = zoneInfo;
+    *reinterpret_cast<int*>(GTA_POPCYCLE_ZONE_TYPE) = m_ambientPedPopulationZoneType;
+
+    // GetCurrentPercOther_Peds returns an integer in EAX, despite older
+    // reverse-engineered declarations naming a float return. Capture it while
+    // this origin's PopCycle context is installed so every consumer observes
+    // one coherent weather-adjusted percentage.
+    m_ambientPedPopulationOtherPercentage = reinterpret_cast<int(__cdecl*)()>(FUNC_GetCurrentPercOtherPeds)();
+    if (m_ambientPedPopulationOtherPercentage < 0 || m_ambientPedPopulationOtherPercentage > 100)
+        return false;
 
     // MTA skips GTA's ambient StreamZoneModels caller so unmanaged population
     // cannot appear. Calling the intact ped-only pass preserves the stock zone
@@ -1556,6 +1622,7 @@ void CGameSA::UpdateAmbientPedPopulationModels(const CVector& origin)
     UpdateAmbientPedDealerModel();
     UpdateAmbientPedGangModels();
     PreserveAmbientPedPopulationStreamingFlags();
+    return true;
 }
 
 void CGameSA::ResetAmbientPedPopulationModels()
@@ -1579,6 +1646,13 @@ void CGameSA::ResetAmbientPedPopulationModels()
     *reinterpret_cast<int*>(GTA_CURRENT_STREAMING_ZONE_TYPE) = -1;
     RestoreAmbientPedPopulationZones();
     m_areAmbientPedPopulationModelsActive = false;
+    m_ambientPedPopulationZone = nullptr;
+    m_ambientPedPopulationZoneInfo = nullptr;
+    m_ambientPedPopulationZoneType = -1;
+    m_ambientPedPopulationTimeIndex = -1;
+    m_ambientPedPopulationWeekend = -1;
+    m_ambientPedPopulationWorldLevel = -1;
+    m_ambientPedPopulationOtherPercentage = -1;
 }
 
 void CGameSA::InitializeAmbientPedPopulationStreamingLease()
@@ -1883,12 +1957,12 @@ void CGameSA::UpdateAmbientPedDealerModel()
         m_ambientPedPopulationStreamingTouched[modelId] = true;
 
     int                            desiredModel = -1;
-    const auto* const              zoneInfo = *reinterpret_cast<SAmbientPedPopulationZoneInfoSA**>(GTA_CURRENT_POPCYCLE_ZONE_INFO);
-    const int                      zoneType = *reinterpret_cast<const int*>(GTA_POPCYCLE_ZONE_TYPE);
-    const int                      timeIndex = *reinterpret_cast<const int*>(GTA_POPCYCLE_TIME_INDEX);
-    const int                      weekend = *reinterpret_cast<const int*>(GTA_POPCYCLE_WEEKEND);
+    const auto* const              zoneInfo = static_cast<const SAmbientPedPopulationZoneInfoSA*>(m_ambientPedPopulationZoneInfo);
+    const int                      zoneType = m_ambientPedPopulationZoneType;
+    const int                      timeIndex = m_ambientPedPopulationTimeIndex;
+    const int                      weekend = m_ambientPedPopulationWeekend;
     SAmbientPedPopulationTargetsSA targets;
-    if (CalculateAmbientPedPopulationTargets(zoneInfo, timeIndex, weekend, zoneType, targets) && targets.dealer > 0.03f)
+    if (CalculateAmbientPedPopulationTargets(zoneInfo, timeIndex, weekend, zoneType, m_ambientPedPopulationOtherPercentage, targets) && targets.dealer > 0.03f)
     {
         // StreamVehiclesAndPeds chooses exactly one entry from the DEALERS
         // group. Keep this ped-only passage separate: the surrounding retail
@@ -1932,7 +2006,7 @@ void CGameSA::UpdateAmbientPedCopModel()
         m_ambientPedPopulationStreamingTouched[modelId] = true;
 
     int       desiredModel = -1;
-    const int currentLevel = *reinterpret_cast<const unsigned char*>(GTA_CURRENT_LEVEL);
+    const int currentLevel = m_ambientPedPopulationWorldLevel;
     if (currentLevel >= 0 && currentLevel < static_cast<int>(std::size(AMBIENT_PED_COP_MODELS)))
     {
         // StreamCopModels also consults wanted state, alternates a bike cop and
@@ -1964,7 +2038,7 @@ void CGameSA::ResetAmbientPedCopModel()
 
 void CGameSA::UpdateAmbientPedGangModels()
 {
-    const auto* const zoneInfo = *reinterpret_cast<SAmbientPedPopulationZoneInfoSA**>(GTA_CURRENT_POPCYCLE_ZONE_INFO);
+    const auto* const zoneInfo = static_cast<const SAmbientPedPopulationZoneInfoSA*>(m_ambientPedPopulationZoneInfo);
     if (!zoneInfo)
         return;
 
@@ -2066,37 +2140,59 @@ void CGameSA::ResetAmbientPedGangModels()
     m_ambientPedGangModelRotation = 0;
 }
 
-bool CGameSA::GetAmbientPedPopulationProfile(SAmbientPedPopulationProfile& profile) const
+EAmbientPedPopulationProfileResult CGameSA::GetAmbientPedPopulationProfile(SAmbientPedPopulationProfile& profile) const
 {
     profile = {};
-    if (!m_areAmbientPedPopulationModelsActive || !*reinterpret_cast<void**>(GTA_CURRENT_POPCYCLE_ZONE) ||
-        !*reinterpret_cast<void**>(GTA_CURRENT_POPCYCLE_ZONE_INFO))
-        return false;
+    if (!m_areAmbientPedPopulationModelsActive)
+        return EAmbientPedPopulationProfileResult::Inactive;
+    if (!m_ambientPedPopulationZone)
+        return EAmbientPedPopulationProfileResult::ZoneUnavailable;
+    if (!m_ambientPedPopulationZoneInfo)
+        return EAmbientPedPopulationProfileResult::ZoneInfoUnavailable;
 
     const float pedDensityMultiplier = *reinterpret_cast<const float*>(GTA_PED_DENSITY_MULTIPLIER);
     const auto  maximumPedsInUse = *reinterpret_cast<const unsigned int*>(GTA_MAX_PEDS_IN_USE);
     const float creationDistanceMultiplier = reinterpret_cast<float(__cdecl*)()>(FUNC_PedCreationDistMultiplier)();
     const float generationDistanceMultiplier = *reinterpret_cast<const float*>(GTA_CAMERA_GENERATION_DISTANCE_MULTIPLIER);
-    const int   zoneType = *reinterpret_cast<const int*>(GTA_POPCYCLE_ZONE_TYPE);
-    const int   timeIndex = *reinterpret_cast<const int*>(GTA_POPCYCLE_TIME_INDEX);
-    const int   weekend = *reinterpret_cast<const int*>(GTA_POPCYCLE_WEEKEND);
-    const auto* zone = *reinterpret_cast<const SAmbientPedNavigationZoneSA**>(GTA_CURRENT_POPCYCLE_ZONE);
-    const auto* zoneInfo = *reinterpret_cast<SAmbientPedPopulationZoneInfoSA**>(GTA_CURRENT_POPCYCLE_ZONE_INFO);
+    const int   zoneType = m_ambientPedPopulationZoneType;
+    const int   timeIndex = m_ambientPedPopulationTimeIndex;
+    const int   weekend = m_ambientPedPopulationWeekend;
+    const auto* zone = static_cast<const SAmbientPedNavigationZoneSA*>(m_ambientPedPopulationZone);
+    const auto* zoneInfo = static_cast<const SAmbientPedPopulationZoneInfoSA*>(m_ambientPedPopulationZoneInfo);
     const auto  zoneAddress = reinterpret_cast<std::uintptr_t>(zone);
     if (zoneAddress < GTA_NAVIGATION_ZONE_ARRAY || zoneAddress >= GTA_NAVIGATION_ZONE_ARRAY + 380 * sizeof(SAmbientPedNavigationZoneSA) ||
         (zoneAddress - GTA_NAVIGATION_ZONE_ARRAY) % sizeof(SAmbientPedNavigationZoneSA) != 0)
     {
-        return false;
+        return EAmbientPedPopulationProfileResult::ZonePointerInvalid;
     }
+    const auto zoneInfoAddress = reinterpret_cast<std::uintptr_t>(zoneInfo);
+    if (zoneInfoAddress < GTA_ZONE_INFO_ARRAY || zoneInfoAddress >= GTA_ZONE_INFO_ARRAY + 380 * sizeof(SAmbientPedPopulationZoneInfoSA) ||
+        (zoneInfoAddress - GTA_ZONE_INFO_ARRAY) % sizeof(SAmbientPedPopulationZoneInfoSA) != 0)
+        return EAmbientPedPopulationProfileResult::ZoneInfoPointerInvalid;
+    if (zoneType < 0 || zoneType >= static_cast<int>(POPCYCLE_ZONE_COUNT))
+        return EAmbientPedPopulationProfileResult::ZoneTypeInvalid;
+    if (timeIndex < 0 || timeIndex >= static_cast<int>(POPCYCLE_TIME_COUNT))
+        return EAmbientPedPopulationProfileResult::TimeIndexInvalid;
+    if (weekend < 0 || weekend >= static_cast<int>(POPCYCLE_WEEK_COUNT))
+        return EAmbientPedPopulationProfileResult::WeekendInvalid;
+    if (m_ambientPedPopulationOtherPercentage < 0 || m_ambientPedPopulationOtherPercentage > 100)
+        return EAmbientPedPopulationProfileResult::OtherPedPercentageInvalid;
+    if (!std::isfinite(pedDensityMultiplier) || pedDensityMultiplier < 0.0f || pedDensityMultiplier > 10.0f)
+        return EAmbientPedPopulationProfileResult::PedDensityInvalid;
+    if (maximumPedsInUse > 110)
+        return EAmbientPedPopulationProfileResult::MaximumPedsInvalid;
+    if (!std::isfinite(creationDistanceMultiplier) || creationDistanceMultiplier < 1.0f || creationDistanceMultiplier > 1.5f)
+        return EAmbientPedPopulationProfileResult::CreationDistanceInvalid;
+    if (!std::isfinite(generationDistanceMultiplier) || generationDistanceMultiplier <= 0.0f || generationDistanceMultiplier > 10.0f)
+        return EAmbientPedPopulationProfileResult::GenerationDistanceInvalid;
+
     SAmbientPedPopulationTargetsSA targets;
-    if (!CalculateAmbientPedPopulationTargets(zoneInfo, timeIndex, weekend, zoneType, targets) || !std::isfinite(pedDensityMultiplier) ||
-        !std::isfinite(creationDistanceMultiplier) || !std::isfinite(generationDistanceMultiplier) || targets.civilian < 0.0f || targets.civilian > 110.0f ||
-        targets.cop < 0.0f || targets.cop > 110.0f || targets.gang < 0.0f || targets.gang > 110.0f || targets.dealer < 0.0f || targets.dealer > 110.0f ||
-        pedDensityMultiplier < 0.0f || pedDensityMultiplier > 10.0f || maximumPedsInUse > 110 || creationDistanceMultiplier < 1.0f ||
-        creationDistanceMultiplier > 1.5f || generationDistanceMultiplier <= 0.0f || generationDistanceMultiplier > 10.0f || zoneType < 0 || zoneType >= 20 ||
-        timeIndex < 0 || timeIndex >= 12 || weekend < 0 || weekend > 1)
+    if (!CalculateAmbientPedPopulationTargets(zoneInfo, timeIndex, weekend, zoneType, m_ambientPedPopulationOtherPercentage, targets))
+        return EAmbientPedPopulationProfileResult::TargetCalculationFailed;
+    if (targets.civilian < 0.0f || targets.civilian > 110.0f || targets.cop < 0.0f || targets.cop > 110.0f || targets.gang < 0.0f || targets.gang > 110.0f ||
+        targets.dealer < 0.0f || targets.dealer > 110.0f)
     {
-        return false;
+        return EAmbientPedPopulationProfileResult::TargetInvalid;
     }
 
     profile.civilianTarget = targets.civilian;
@@ -2113,10 +2209,11 @@ bool CGameSA::GetAmbientPedPopulationProfile(SAmbientPedPopulationProfile& profi
     profile.dealerStrength = zoneInfo->dealerStrength;
     profile.raceFlags = zoneInfo->raceFlags & 0x0F;
     profile.noCops = (zoneInfo->populationFlags & 0x80) != 0;
-    const int currentLevel = *reinterpret_cast<const unsigned char*>(GTA_CURRENT_LEVEL);
+    const int currentLevel = m_ambientPedPopulationWorldLevel;
     if (currentLevel < 0 || currentLevel >= static_cast<int>(std::size(AMBIENT_PED_COP_MODELS)))
-        return false;
+        return EAmbientPedPopulationProfileResult::WorldLevelInvalid;
     profile.worldLevel = static_cast<unsigned char>(currentLevel);
+    profile.otherPedPercentage = static_cast<unsigned char>(m_ambientPedPopulationOtherPercentage);
     if (profile.noCops)
         profile.copSuppressionFlags |= static_cast<unsigned char>(EAmbientPedCopSuppression::ZoneNoCops);
     if (*reinterpret_cast<const bool*>(GTA_DONT_CREATE_RANDOM_COPS))
@@ -2131,7 +2228,12 @@ bool CGameSA::GetAmbientPedPopulationProfile(SAmbientPedPopulationProfile& profi
     profile.target = profile.supportedTarget;
     std::copy(std::begin(zoneInfo->gangStrength), std::end(zoneInfo->gangStrength), std::begin(profile.gangWeights));
     std::copy(std::begin(zone->infoLabel), std::end(zone->infoLabel), std::begin(profile.zoneLabel));
-    return std::isfinite(profile.target) && std::isfinite(profile.supportedTarget) && profile.target <= 110.0f;
+    if (!std::isfinite(profile.target) || !std::isfinite(profile.supportedTarget) || profile.target < 0.0f || profile.target > 110.0f ||
+        profile.supportedTarget < 0.0f || profile.supportedTarget > 110.0f)
+    {
+        return EAmbientPedPopulationProfileResult::TargetInvalid;
+    }
+    return EAmbientPedPopulationProfileResult::Success;
 }
 
 bool CGameSA::IsAmbientPedSphereVisible(const CVector& position, float radius)
@@ -2282,8 +2384,59 @@ EAmbientVehicleSpawnCandidateResult CGameSA::GetAmbientVehicleSpawnCandidate(con
         vehicleClass != VehicleClass::BIKE && vehicleClass != VehicleClass::BMX)
         return EAmbientVehicleSpawnCandidateResult::UnsupportedModel;
 
-    float       directionX = *reinterpret_cast<const float*>(GTA_CAMERA_FORWARD_X);
-    float       directionY = *reinterpret_cast<const float*>(GTA_CAMERA_FORWARD_Y);
+    constexpr float          SPAWN_FORWARD_NARROW = 0.85f;
+    constexpr float          SPAWN_FORWARD_WIDE = 0.707f;
+    constexpr float          FAST_PLAYER_VEHICLE_SPEED = 0.4f;
+    constexpr float          MOVING_PLAYER_VEHICLE_SPEED = 0.1f;
+    constexpr std::uintptr_t GTA_TOP_DOWN_CAMERA_HEIGHT = 0xB6F9B4;
+    constexpr std::uintptr_t GTA_TOP_DOWN_CAMERA_THRESHOLD = 0x858CAC;
+    constexpr std::uintptr_t FUNC_FindPlayerVehicle = 0x56E0D0;
+
+    float directionX = *reinterpret_cast<const float*>(GTA_CAMERA_FORWARD_X);
+    float directionY = *reinterpret_cast<const float*>(GTA_CAMERA_FORWARD_Y);
+    float dotLimit = SPAWN_FORWARD_WIDE;
+    bool  requireInsideCone = (rand() & 1) == 0;
+
+    // Match GenerateOneRandomCar's directional policy. Retail does not predict
+    // a destination: at speed it biases candidates using the player's current
+    // vehicle velocity, while slow/on-foot generation alternates around the
+    // camera direction. Lua may move the query origin slightly forward solely
+    // to compensate for distributed request latency.
+    if (*reinterpret_cast<const float*>(GTA_TOP_DOWN_CAMERA_HEIGHT) < *reinterpret_cast<const float*>(GTA_TOP_DOWN_CAMERA_THRESHOLD))
+    {
+        directionX = SPAWN_FORWARD_WIDE;
+        directionY = SPAWN_FORWARD_WIDE;
+        dotLimit = -1.0f;
+        requireInsideCone = true;
+    }
+    else
+    {
+        using FindPlayerVehicle = CPhysicalSAInterface*(__cdecl*)(int, bool);
+        CPhysicalSAInterface* const playerVehicle = reinterpret_cast<FindPlayerVehicle>(FUNC_FindPlayerVehicle)(-1, false);
+        if (playerVehicle)
+        {
+            directionX = playerVehicle->m_vecLinearVelocity.fX;
+            directionY = playerVehicle->m_vecLinearVelocity.fY;
+            const float speed = std::sqrt(directionX * directionX + directionY * directionY);
+            if (std::isfinite(speed) && speed > MOVING_PLAYER_VEHICLE_SPEED)
+            {
+                directionX /= speed;
+                directionY /= speed;
+                const unsigned int branch = rand() & 3;
+                if (speed > FAST_PLAYER_VEHICLE_SPEED)
+                {
+                    dotLimit = branch <= 1 ? SPAWN_FORWARD_NARROW : SPAWN_FORWARD_WIDE;
+                    requireInsideCone = branch <= 2;
+                }
+                else
+                {
+                    dotLimit = branch == 0 ? SPAWN_FORWARD_NARROW : SPAWN_FORWARD_WIDE;
+                    requireInsideCone = branch <= 1;
+                }
+            }
+        }
+    }
+
     const float directionLength = std::sqrt(directionX * directionX + directionY * directionY);
     if (!std::isfinite(directionLength) || directionLength < 0.001f)
     {
@@ -2310,24 +2463,8 @@ EAmbientVehicleSpawnCandidateResult CGameSA::GetAmbientVehicleSpawnCandidate(con
     using GenerateCarCreationCoors2 = bool(__cdecl*)(CVector, float, float, float, bool, float, float, CVector*, SAmbientVehicleNodeAddressSA*,
                                                      SAmbientVehicleNodeAddressSA*, float*, bool, bool);
     const auto generate = reinterpret_cast<GenerateCarCreationCoors2>(FUNC_GenerateCarCreationCoors2);
-    bool generated = generate(origin, directionX, directionY, -1.0f, true, generationMultiplier * generationBaseDistance, 38.0f, &position, &nodeA, &nodeB,
-                              &pathLerp, true, false);
-    if (!generated)
-    {
-        // Retail calls this probabilistic oracle twice per frame indefinitely.
-        // Neon has a bounded server request, so probe three additional camera
-        // sectors with a wider inner ring before reporting a normal miss.
-        constexpr float FALLBACK_ANGLES[] = {1.0471975512f, -1.0471975512f, 3.1415926536f};
-        for (float angle : FALLBACK_ANGLES)
-        {
-            const float rotatedX = directionX * std::cos(angle) - directionY * std::sin(angle);
-            const float rotatedY = directionX * std::sin(angle) + directionY * std::cos(angle);
-            generated = generate(origin, rotatedX, rotatedY, -1.0f, true, generationMultiplier * generationBaseDistance, 70.0f, &position, &nodeA, &nodeB,
-                                 &pathLerp, true, false);
-            if (generated)
-                break;
-        }
-    }
+    const bool generated = generate(origin, directionX, directionY, dotLimit, requireInsideCone, generationMultiplier * generationBaseDistance, 38.0f,
+                                    &position, &nodeA, &nodeB, &pathLerp, true, false);
     if (!generated)
     {
         // GenerateCarCreationCoors2 keeps two low-traffic and two ordinary
@@ -2364,13 +2501,13 @@ EAmbientVehicleSpawnCandidateResult CGameSA::GetAmbientVehicleSpawnCandidate(con
     if (!std::isfinite(deltaX) || !std::isfinite(deltaY) || !std::isfinite(pathLength) || pathLength < 0.1f)
         return EAmbientVehicleSpawnCandidateResult::InvalidPathNode;
 
-    float laneOffset = 0.0f;
-    if (!GetAmbientVehicleLaneOffset(nodeA, nodeB, modelId, vehicleClass, laneOffset))
+    SAmbientVehicleLaneSelection laneSelection{};
+    if (!GetAmbientVehicleLaneSelection(nodeA, nodeB, modelId, vehicleClass, laneSelection))
         return EAmbientVehicleSpawnCandidateResult::NoPath;
     const float directionXOnRoad = deltaX / pathLength;
     const float directionYOnRoad = deltaY / pathLength;
-    position.fX += laneOffset * directionYOnRoad;
-    position.fY -= laneOffset * directionXOnRoad;
+    position.fX += laneSelection.offsetMeters * directionYOnRoad;
+    position.fY -= laneSelection.offsetMeters * directionXOnRoad;
 
     const float pathHeight = pathStart.fZ + (pathEnd.fZ - pathStart.fZ) * pathLerp;
     bool        hasGround = false;
@@ -2393,6 +2530,20 @@ EAmbientVehicleSpawnCandidateResult CGameSA::GetAmbientVehicleSpawnCandidate(con
     candidate.position = CVector(position.fX, position.fY, groundZ + centreToBase);
     candidate.rotationDegrees = rotation;
     candidate.modelId = modelId;
+    candidate.pathLerp = pathLerp;
+    candidate.laneOffsetMeters = laneSelection.offsetMeters;
+    candidate.pathNodeAArea = nodeA.area;
+    candidate.pathNodeAId = nodeA.node;
+    candidate.pathNodeBArea = nodeB.area;
+    candidate.pathNodeBId = nodeB.node;
+    candidate.carLinkArea = laneSelection.carLinkArea;
+    candidate.carLinkId = laneSelection.carLinkId;
+    candidate.laneCount = laneSelection.laneCount;
+    candidate.laneIndex = laneSelection.laneIndex;
+    candidate.queryDirectionX = directionX;
+    candidate.queryDirectionY = directionY;
+    candidate.queryDotLimit = dotLimit;
+    candidate.queryRequireInsideCone = requireInsideCone;
 
     // GenerateOneRandomCar stores an integer cruise speed. Preserve its
     // vehicle-list ranges and reductions before transporting the scalar to the
@@ -2454,7 +2605,7 @@ EAmbientPedSpawnCandidateResult CGameSA::GetAmbientPedSpawnCandidateForPopulatio
     int                          modelId = -1;
     CPedModelInfoSAInterface*    modelInfo = nullptr;
     SAmbientPedPopulationProfile profile;
-    const bool                   hasProfile = GetAmbientPedPopulationProfile(profile);
+    const bool                   hasProfile = GetAmbientPedPopulationProfile(profile) == EAmbientPedPopulationProfileResult::Success;
     const float                  automaticTicket = selection == EAmbientPedPopulationSelection::Automatic && hasProfile && profile.supportedTarget > 0.0f
                                                        ? static_cast<float>(rand() & 0xFFFF) / 65535.0f * profile.supportedTarget
                                                        : -1.0f;
@@ -2485,7 +2636,7 @@ EAmbientPedSpawnCandidateResult CGameSA::GetAmbientPedSpawnCandidateForPopulatio
     }
     if (chooseGang)
     {
-        const auto* const zoneInfo = *reinterpret_cast<SAmbientPedPopulationZoneInfoSA**>(GTA_CURRENT_POPCYCLE_ZONE_INFO);
+        const auto* const zoneInfo = static_cast<const SAmbientPedPopulationZoneInfoSA*>(m_ambientPedPopulationZoneInfo);
         if (!zoneInfo)
             return EAmbientPedSpawnCandidateResult::NoModel;
         unsigned int selectedGangId = gangId;

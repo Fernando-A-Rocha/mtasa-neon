@@ -148,10 +148,16 @@ public:
                                                                   const bool bKeepNodesHeadingAwayFromTarget, const int iTime, const bool bUseBlending);
     bool                         IsPedScriptCommandTaskReady(CPed* pPed) const;
 
+    CTaskSimple* CreateTaskSimpleAchieveHeading(float headingDegrees) override;
+
     static void StaticSetHooks();
     // Cargo operations retain MTA ownership; state is 0 (released), 1 (holding), 2 (putting down), or 3 (starting).
     bool StartPedCarryObject(CPed* ped, CObject* object) override;
     bool PutDownPedObject(CPed* ped) override;
     int  GetPedCarryState(CPed* ped) override;
     void CancelPedCarryObject(CPed* ped) override;
+    bool PickUpPedObject(CPed* ped, CObject* object) override;
+
+private:
+    bool StartCargo(CPed* ped, CObject* object, bool pickup);
 };

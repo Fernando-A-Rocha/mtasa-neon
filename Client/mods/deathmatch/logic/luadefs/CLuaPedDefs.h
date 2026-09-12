@@ -136,6 +136,8 @@ public:
                                  std::optional<bool> keepNodesHeadingAwayFromTarget, std::optional<int> timeout, std::optional<bool> useBlending);
     static bool SetPedChatWith(CClientPed* ped, CClientPed* partner, bool leadSpeaker, std::optional<bool> updateDirection,
                                std::optional<bool> conversationEnabled);
+    static bool SetPedAchieveHeading(CClientPed* ped, float headingDegrees);
+    static bool SetPedAimAt(CClientPed* ped, CVector target, std::optional<int> duration);
     static bool SetPedStandStill(CClientPed* ped, std::optional<int> duration);
     static bool SetPedTurnToFace(CClientPed* ped, CClientPed* target);
     static bool SetPedGoToOffset(CClientPed* ped, CClientPed* target, std::optional<int> timeout, std::optional<float> radius, std::optional<float> angle,
@@ -149,6 +151,8 @@ public:
     static bool StopPedFacialTalk(CClientPed* ped);
     static bool SetPedShootAt(CClientPed* ped, CVector target, std::optional<int> duration, std::optional<int> burstLength);
     LUA_DECLARE(SetPedCarryObject);
+    LUA_DECLARE(PickUpPedObject);
+    LUA_DECLARE(GetPedNoiseLevel);
     LUA_DECLARE(GetPedCarriedObject);
     LUA_DECLARE(PutDownPedObject);
     LUA_DECLARE(CancelPedCarryObject);
